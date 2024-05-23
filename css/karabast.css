@@ -11,7 +11,7 @@ body {
   margin: 0px;
 }
 
-h1, h2, h3, h4, h5, h6, p, a, ul, ol, dl, dd, details, blockquote, table, button, input, select, textarea {
+h1, h2, h3, h4, h5, h6, p, a, b, ul, ol, dl, dd, form, details, blockquote, table, button, input, label, select, textarea {
   font-family: barlow;
   color: white;
   margin: 0;
@@ -90,6 +90,67 @@ margin-bottom: 15px;
   font-size: 12px;
   font-weight: 300;
   text-align: center;
+}
+
+
+
+/* HOME */
+
+/* Legacy */
+
+li {
+  display: flex;
+}
+
+ul {
+  display: flex;
+  margin: 0px;
+  column-gap: 15px;
+  align-items: center;
+}
+
+.ContentWindow {
+  background-color: rgb(0, 0, 0, 40%);
+  backdrop-filter: blur(20px);
+  border-radius: 10px;
+  padding: 20px;
+  position: absolute;
+}
+
+.NavBarDiv {
+  font-size: 1.5rem;
+  position: fixed;
+  left: 0px;
+  top: 0px;
+  height: 45px;
+  width: 100%;
+  z-index: 100;
+  background-color: rgb(0, 0, 0, 40%);
+  backdrop-filter: blur(20px);
+  display: flex;
+  justify-content: space-between;
+}
+
+.NavBarDiv ul {
+  padding-left: 2rem;
+  padding-right: 2rem;
+  column-gap: 10px;
+}
+
+.NavBarDiv img {
+  width: 25px;
+  height: 25px;
+}
+
+.NavBarItem {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.NavBarItemDivider {
+  font-size: 14px;
+  font-weight: 600;
+  height: 27px;
 }
 
 /* GAME LOBBY */
