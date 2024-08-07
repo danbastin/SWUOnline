@@ -370,6 +370,21 @@ function SearchCurrentTurnEffects($cardID, $player, $remove = false)
   return false;
 }
 
+function GetCurrentTurnEffects($cardID, $player, $remove = false)
+{
+  global $currentTurnEffects;
+  $rv = [];
+  for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
+    if ($currentTurnEffects[$i] == $cardID && $currentTurnEffects[$i + 1] == $player) {
+      $turnEffect = array_slice($currentTurnEffects, $i, CurrentTurnEffectPieces());
+      $rv = array_slice($currentTurnEffects, $i, CurrentTurnEffectPieces());
+      if ($remove) RemoveCurrentTurnEffect($i);
+      return $rv;
+    }
+  }
+  return false;
+}
+
 function SearchLimitedCurrentTurnEffects($cardID, $player, $remove = false)
 {
   global $currentTurnEffects;
@@ -999,20 +1014,6 @@ function ControlsNamedCard($player, $name) {
   if(count($char) > CharacterPieces() && CardTitle($char[CharacterPieces()]) == $name) return true;
   if(SearchCount(SearchAlliesForTitle($player, $name)) > 0) return true;
   return false;
-}
-
-function ReservableIndices($player)
-{
-  $indices = "";
-  $auras = &GetAuras($player);
-  for($i = 0; $i < count($auras); $i += AuraPieces())
-  {
-    if($auras[$i+1] == 2 && HasReservable($auras[$i], $player, $i)) {
-      if($indices != "") $indices .= ",";
-      $indices .= $i;
-    }
-  }
-  return $indices;
 }
 
 function SearchGetLast($search) {

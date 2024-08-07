@@ -285,9 +285,11 @@ function CurrentEffectCostModifiers($cardID, $from, $reportMode=false)
           break;
         case "8506660490"://Darth Vader
           $costModifier -= 99;
+          $remove = true;
           break;
         case "8968669390"://U-Wing Reinforcement
           $costModifier -= 99;
+          $remove = true;
           break;
         case "5440730550"://Lando Calrissian Leader
         case "040a3e81f3"://Lando Calrissian Leader Unit
@@ -565,8 +567,11 @@ function CurrentEffectEndTurnAbilities()
         DealDamageAsync($currentTurnEffects[$i+1], 999999);
         break;
       case "6117103324"://Jetpack
-        $ally = new Ally("MYALLY-" . SearchAlliesForUniqueID($currentTurnEffects[$i+2], $currentTurnEffects[$i+1]), $currentTurnEffects[$i+1]);
-        $ally->DefeatUpgrade("8752877738");
+        $allyIndex = SearchAlliesForUniqueID($currentTurnEffects[$i+2], $currentTurnEffects[$i+1]);
+        if($allyIndex > -1) {
+          $ally = new Ally("MYALLY-" . $allyIndex, $currentTurnEffects[$i+1]);
+          $ally->DefeatUpgrade("8752877738");
+        }
         break;
       case "4002861992"://DJ (Blatant Thief)
         AddNextTurnEffect($currentTurnEffects[$i], $currentTurnEffects[$i + 1]);

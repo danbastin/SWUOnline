@@ -119,14 +119,16 @@ class Ally {
 
   function Destroy() {
     if($this->index == -1) return "";
-    if($this->CardID() == "1810342362") return "";//Lurking TIE Phantom
+    global $mainPlayer;
+    if($this->CardID() == "1810342362" && !$this->LostAbilities() && $mainPlayer != $this->playerID) return "";//Lurking TIE Phantom
     return DestroyAlly($this->playerID, $this->index);
   }
 
   //Returns true if the ally is destroyed
   function DealDamage($amount, $bypassShield = false, $fromCombat = false, &$damageDealt = NULL) {
     if($this->index == -1 || $amount <= 0) return false;
-    if(!$fromCombat && $this->CardID() == "1810342362") return;//Lurking TIE Phantom
+    global $mainPlayer;
+    if(!$fromCombat && $this->CardID() == "1810342362" && !$this->LostAbilities() && $mainPlayer != $this->playerID) return;//Lurking TIE Phantom
     $subcards = $this->GetSubcards();
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
       if($subcards[$i] == "8752877738") {
@@ -235,7 +237,7 @@ class Ally {
           if($this->IsUpgraded()) $power += 1;
           break;
         case "919facb76d"://Boba Fett Green Leader
-          if($i != $this->index) $power += 1;
+          if($i != $this->index && HasKeyword($this->CardID(), "Any", $this->playerID, $this->index)) $power += 1;
           break;
         default: break;
       }
@@ -320,6 +322,7 @@ class Ally {
         unset($subcards[$i]);
         $subcards = array_values($subcards);
         $this->allies[$this->index + 4] = count($subcards) > 0 ? implode(",", $subcards) : "-";
+        if(DefinedTypesContains($subcardID, "Upgrade")) UpgradeDetached($subcardID, $this->playerID, "MYALLY-" . $this->index);
         return $ownerId;
       }
     }
@@ -340,7 +343,7 @@ class Ally {
   function GetSubcards() {
     $subcards = $this->allies[$this->index + 4];
     if($subcards == null || $subcards == "" || $subcards == "-") return [];
-    return explode(",", $this->allies[$this->index + 4]);
+    return explode(",", $subcards);
   }
 
   function GetUpgrades($withOwnerData = false) {

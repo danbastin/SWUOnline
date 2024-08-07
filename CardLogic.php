@@ -29,14 +29,20 @@ function PummelHit($player = -1, $passable = false, $fromDQ = false, $context=""
   }
 }
 
-function DefeatUpgrade($player, $may = false, $search="MYALLY&THEIRALLY", $upgradeFilter="", $to="DISCARD") {
+function DefeatUpgrade($player, $may = false, $search="MYALLY&THEIRALLY", $upgradeFilter="", $to="DISCARD", $passable=false) {
   $verb = "";
   switch($to) {
     case "DISCARD": $verb = "defeat"; break;
     case "HAND": $verb = "bounce"; break;
   }
-  AddDecisionQueue("MULTIZONEINDICES", $player, $search);
-  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to " . $verb . " an upgrade from");
+  if($passable) {
+    AddDecisionQueue("MULTIZONEINDICES", $player, $search, 1);
+    AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to " . $verb . " an upgrade from", 1);
+  }
+  else {
+    AddDecisionQueue("MULTIZONEINDICES", $player, $search);
+    AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to " . $verb . " an upgrade from");
+  }
   if($may) AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
   else AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
   AddDecisionQueue("SETDQVAR", $player, 0, 1);
@@ -605,8 +611,11 @@ function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $targe
     case "9642863632"://Bounty Hunter's Quarry
       AddCurrentTurnEffect($parameter, $player);
       AddDecisionQueue("MZMYDECKTOPX", $player, $target);
+      AddDecisionQueue("MZFILTER", $player, "maxCost=3", 1);
+      AddDecisionQueue("MZFILTER", $player, "definedType!=Unit", 1);
       AddDecisionQueue("SETDQCONTEXT", $player, "Choose a card to play");
       AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("ADDCURRENTEFFECT", $player, "9642863632", 1);
       AddDecisionQueue("MZOP", $player, "PLAYCARD", 1);
       break;
     case "7642980906"://Stolen Landspeeder
