@@ -369,8 +369,9 @@ function IsGamePhase($phase)
 function ContinueDecisionQueue($lastResult = "")
 {
   global $decisionQueue, $turn, $currentPlayer, $mainPlayerGamestateStillBuilt, $makeCheckpoint, $otherPlayer;
-  global $layers, $layerPriority, $dqVars, $dqState, $CS_PlayIndex, $CS_AdditionalCosts, $mainPlayer, $CS_LayerPlayIndex;
+  global $layers, $layerPriority, $dqVars, $dqState, $CS_PlayIndex, $CS_AdditionalCosts, $mainPlayer, $CS_LayerPlayIndex, $CS_OppCardActive;
   global $CS_ResolvingLayerUniqueID;
+
   if(count($decisionQueue) == 0 || IsGamePhase($decisionQueue[0])) {
     if($mainPlayerGamestateStillBuilt) UpdateMainPlayerGameState();
     else if(count($decisionQueue) > 0 && $currentPlayer != $decisionQueue[1]) {
@@ -442,6 +443,8 @@ function ContinueDecisionQueue($lastResult = "")
               ProcessDecisionQueue();
             }
             else {
+              $oppCardActive = GetClassState($currentPlayer, $CS_OppCardActive) >= 0;
+
               $cardID = $parameter;
               $subparamArr = explode("!", $target);
               $from = $subparamArr[0];
@@ -452,7 +455,7 @@ function ContinueDecisionQueue($lastResult = "")
               $playIndex = count($subparamArr) > 5 ? $subparamArr[5] : -1;
                 SetClassState($player, $CS_AbilityIndex, $abilityIndex);
                 SetClassState($player, $CS_PlayIndex, $playIndex);
-                $playText = PlayAbility($cardID, $from, $resourcesPaid, $target, $additionalCosts);
+                $playText = PlayAbility($cardID, $from, $resourcesPaid, $target, $additionalCosts, $oppCardActive);
                 if($from != "PLAY") WriteLog("Resolving play ability of " . CardLink($cardID, $cardID) . ($playText != "" ? ": " : ".") . $playText);
                 if($from == "EQUIP") {
                   EquipPayAdditionalCosts(FindCharacterIndex($player, $cardID), "EQUIP");
@@ -608,15 +611,23 @@ function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $targe
       $uniqueID = $arr[1];
       AllyPlayCardAbility($target, $player, from: $additionalCosts, abilityID:$abilityID, uniqueID:$uniqueID);
       break;
-    case "9642863632"://Bounty Hunter's Quarry
-      AddCurrentTurnEffect($parameter, $player);
-      AddDecisionQueue("MZMYDECKTOPX", $player, $target);
-      AddDecisionQueue("MZFILTER", $player, "maxCost=3", 1);
-      AddDecisionQueue("MZFILTER", $player, "definedType!=Unit", 1);
+    case "9642863632":
+      global $CS_AfterPlayedBy;
+      AddDecisionQueue("FINDINDICES", $player, "DECKTOPXREMOVE," . $target);
+      AddDecisionQueue("SETDQVAR", $player, "0", 1);
+      AddDecisionQueue("FILTER", $player, "LastResult-include-maxCost-3", 1);
+      AddDecisionQueue("FILTER", $player, "LastResult-include-definedType-Unit", 1);
       AddDecisionQueue("SETDQCONTEXT", $player, "Choose a card to play");
-      AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("CHOOSECARD", $player, "<-", 1);
+      AddDecisionQueue("SETDQVAR", $player, "1");
+      AddDecisionQueue("OP", $player, "REMOVECARD");
+      AddDecisionQueue("ALLRANDOMBOTTOM", $player, "DECK");
+      AddDecisionQueue("PASSPARAMETER", $player, "{1}");
       AddDecisionQueue("ADDCURRENTEFFECT", $player, "9642863632", 1);
-      AddDecisionQueue("MZOP", $player, "PLAYCARD", 1);
+      AddDecisionQueue("PASSPARAMETER", $player, "9642863632", 1);
+      AddDecisionQueue("SETCLASSSTATE", $player, $CS_AfterPlayedBy, 1);
+      AddDecisionQueue("PASSPARAMETER", $player, "{1}", 1);
+      AddDecisionQueue("OP", $player, "PLAYCARD,DECK", 1);
       break;
     case "7642980906"://Stolen Landspeeder
       AddDecisionQueue("MULTIZONEINDICES", $player, "MYDISCARD:cardID=" . "7642980906");
@@ -640,6 +651,41 @@ function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $targe
       AddDecisionQueue("ADDCURRENTEFFECT", $player, "7270736993", 1);
       AddDecisionQueue("PASSPARAMETER", $player, "{0}", 1);
       AddDecisionQueue("MZOP", $player, "PLAYCARD", 1);
+      break;
+    case "724979d608"://Cad Bane Unit
+      $cadIndex = SearchAlliesForCard($player, "724979d608");
+      $otherPlayer = ($player == 1 ? 2 : 1);
+      AddDecisionQueue("YESNO", $player, "if you want use Cad Bane's ability");
+      AddDecisionQueue("NOPASS", $player, "-");
+      AddDecisionQueue("PASSPARAMETER", $player, "MYALLY-" . $cadIndex, 1);
+      AddDecisionQueue("ADDMZUSES", $player, "-1", 1);
+      AddDecisionQueue("MULTIZONEINDICES", $otherPlayer, "MYALLY", 1);
+      AddDecisionQueue("SETDQCONTEXT", $otherPlayer, "Choose a unit to deal 2 damage to", 1);
+      AddDecisionQueue("CHOOSEMULTIZONE", $otherPlayer, "<-", 1);
+      AddDecisionQueue("MZOP", $otherPlayer, "DEALDAMAGE,2", 1);
+      break;
+    case "1384530409"://Cad Bane Leader ability
+      $otherPlayer = ($player == 1 ? 2 : 1);
+      AddDecisionQueue("YESNO", $player, "if you want use Cad Bane's ability");
+      AddDecisionQueue("NOPASS", $player, "-");
+      AddDecisionQueue("EXHAUSTCHARACTER", $player, FindCharacterIndex($player, "1384530409"), 1);
+      AddDecisionQueue("MULTIZONEINDICES", $otherPlayer, "MYALLY", 1);
+      AddDecisionQueue("SETDQCONTEXT", $otherPlayer, "Choose a unit to deal 1 damage to", 1);
+      AddDecisionQueue("CHOOSEMULTIZONE", $otherPlayer, "<-", 1);
+      AddDecisionQueue("MZOP", $otherPlayer, "DEALDAMAGE,1", 1);
+      break;
+    case "4088c46c4d"://Mandalorian Leader Unit
+      AddDecisionQueue("MULTIZONEINDICES", $player, "THEIRALLY:maxHealth=6");
+      AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to exhaust", 1);
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("MZOP", $player, "REST", 1);
+      break;
+    case "9005139831"://Mandalorian Leader Ability
+      AddDecisionQueue("MULTIZONEINDICES", $player, "THEIRALLY:maxHealth=4");
+      AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to exhaust", 1);
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("MZOP", $player, "REST", 1);
+      AddDecisionQueue("EXHAUSTCHARACTER", $player, FindCharacterIndex($player, "9005139831"), 1);
       break;
     default: break;
   }
