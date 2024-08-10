@@ -134,6 +134,20 @@ function DecisionQueueStaticEffect($phase, $player, $parameter, $lastResult)
           $allies = &GetAllies($player == 1 ? 2 : 1);
           $rv = count($allies) . "-" . GetIndices(count($allies), 0 , AllyPieces());
           break;
+        case "ALLTHEIRGROUNDUNITSMULTI":
+          $allies = &GetAllies($player == 1 ? 2 : 1);
+          $groundAllies = "";
+          $groundCount = 0;
+          for($i = 0; $i < count($allies); $i+=AllyPieces()) {
+            if(ArenaContains($allies[$i], "Ground", $player)) {
+              WriteLog("Card in Ground -> " . $allies[$i]);
+              if($groundAllies != "") $groundAllies .= ",";
+              $groundAllies .= $i;
+              $groundCount++;
+            }
+          }
+          $rv = $groundCount . "-" . $groundAllies;
+          break;
         case "GYTYPE": $rv = SearchDiscard($player, $subparam); break;
         case "GYAA": $rv = SearchDiscard($player, "AA"); break;
         case "GYNAA": $rv = SearchDiscard($player, "A"); break;
@@ -372,7 +386,7 @@ function DecisionQueueStaticEffect($phase, $player, $parameter, $lastResult)
             $isAttackTarget = GetAttackTarget() == $lastResult;
             $isAttacker = AttackerMZID($player) == $lastResult;
             $ally = new Ally($lastResult);
-            $destroyed = $ally->DealDamage($parameterArr[1]);
+            $destroyed = $ally->DealDamage($parameterArr[1], enemyDamage:(count($parameterArr) > 2 && $parameterArr[2] != $targetPlayer));
             if($destroyed) {
               if($isAttackTarget || $isAttacker) CloseCombatChain();
               return "";
