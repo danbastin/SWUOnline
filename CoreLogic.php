@@ -2872,7 +2872,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       AddDecisionQueue("MULTIDISTRIBUTEDAMAGE", $currentPlayer, $ally->CurrentPower(), 1);
       break;
     case "3974134277"://Prepare for Takeoff
-      AddDecisionQueue("SEARCHDECKTOPX", $currentPlayer, "8;2;include-trait-Vehicle");
+      AddDecisionQueue("SEARCHDECKTOPX", $currentPlayer, "8;2;include-trait-Vehicle&include-definedType-Unit");
       AddDecisionQueue("MULTIADDHAND", $currentPlayer, "-", 1);
       AddDecisionQueue("REVEALCARDS", $currentPlayer, "-", 1);
       break;
@@ -4466,10 +4466,12 @@ function DestroyAllAllies()
 
   //Destroy all those allies.
   foreach ($currentPlayerAlliesUniqueIDs as $UID) {
-    DestroyAlly($currentPlayer, SearchAlliesForUniqueID($UID, $currentPlayer));
+    $ally = new Ally("MYALLY-" . SearchAlliesForUniqueID($UID, $currentPlayer), $currentPlayer);
+    $ally->Destroy();
   }
   foreach ($otherPlayerAlliesUniqueIDs as $UID) {
-    DestroyAlly($otherPlayer, SearchAlliesForUniqueID($UID, $otherPlayer));
+    $ally = new Ally("MYALLY-" . SearchAlliesForUniqueID($UID, $otherPlayer), $otherPlayer);
+    $ally->Destroy();
   }
 }
 
