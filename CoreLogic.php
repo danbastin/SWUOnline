@@ -1126,10 +1126,12 @@ function TraitContains($cardID, $trait, $player="", $index=-1)
     $ally = new Ally("MYALLY-" . $index, $player);
     $upgrades = $ally->GetUpgrades();
     for($i=0; $i<count($upgrades); ++$i) {
-      switch($upgrades[$i]) {
-        case "7687006104": if($trait == "Mandalorian") { return true; } break;
-        default: break;}
-      if(TraitContains($upgrades[$i], $trait, $player)) return true;
+      switch ($upgrades[$i]) {
+        case "7687006104":
+          if($trait == "Mandalorian") return true;
+          break;
+        default: break;
+      }
     }
   }
   $cardTrait = CardTraits($cardID);
@@ -1788,7 +1790,8 @@ function SelfCostModifier($cardID, $from)
   }
   //Target cost modifier
   if(count($layers) > 0) {
-    $targetID = GetMZCard($currentPlayer, GetClassState($currentPlayer, $CS_LayerTarget));
+    $mzIndex = GetClassState($currentPlayer, $CS_LayerTarget);
+    $targetID = GetMZCard($currentPlayer, $mzIndex);
   } else {
     if(SearchAlliesForCard($currentPlayer, "4166047484") != "") $targetID = "4166047484";
     else if($cardID == "3141660491") $targetID = "4088c46c4d";
@@ -1796,7 +1799,12 @@ function SelfCostModifier($cardID, $from)
   }
   if(DefinedTypesContains($cardID, "Upgrade", $currentPlayer)) {
     if($targetID == "4166047484") $modifier -= 1;//Guardian of the Whills
-    if($cardID == "3141660491" && $targetID != "" && TraitContains($targetID, "Mandalorian", $currentPlayer)) $modifier -= $penalty * 2;//The Darksaber
+    if($cardID == "3141660491" && $targetID != "") {//The Darksaber
+      $isMando = TraitContains($targetID, "Mandalorian", $currentPlayer, isset($mzIndex) && $mzIndex != "-" ? explode("-", $mzIndex)[1] : -1);
+      if($isMando) {
+        $modifier -= 2;
+      }
+    }
   }
   //My ally cost modifier
   $allies = &GetAllies($currentPlayer);
@@ -2227,6 +2235,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
     case "6028207223"://Pirated Starfighter
       if($from != "PLAY") {
         AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY");
+        AddDecisionQueue("MZFILTER", $currentPlayer, "leader=1");
         AddDecisionQueue("CHOOSEMULTIZONE", $currentPlayer, "<-", 1);
         AddDecisionQueue("MZOP", $currentPlayer, "BOUNCE", 1);
       }
@@ -2471,7 +2480,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       break;
     case "6515891401"://Karabast
       $ally = new Ally($target);
-      $damage = $ally->MaxHealth() - $ally->Health() + 1;
+      $damage = $ally->Damage() + 1;
       AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose a unit to deal " . $damage . " damage to");
       AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "THEIRALLY");
       AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
@@ -2662,6 +2671,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       if($abilityName == "Give Shield") {
         AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY:aspect=Heroism");
         AddDecisionQueue("MZFILTER", $currentPlayer, "turns=>0");
+        AddDecisionQueue("MZFILTER", $currentPlayer, "leader=1");
         AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1, 1);
         AddDecisionQueue("MZOP", $currentPlayer, "ADDSHIELD", 1);
       }
@@ -2880,9 +2890,9 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       if($from != "PLAY") {
         $ally = new Ally("MYALLY-" . LastAllyIndex($currentPlayer));
         for($i=0; $i<8; ++$i) {
-          AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY", $i == 0 ? 0 : 1);
-          AddDecisionQueue("PREPENDLASTRESULT", $currentPlayer, "MYCHAR-0,", $i == 0 ? 0 : 1);
-          AddDecisionQueue("MZFILTER", $currentPlayer, "index=MYALLY-" . $playAlly->Index());
+          AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY&THEIRALLY", $i == 0 ? 0 : 1);
+          AddDecisionQueue("PREPENDLASTRESULT", $currentPlayer, "MYCHAR-0,THEIRCHAR-0,", $i == 0 ? 0 : 1);
+          AddDecisionQueue("MZFILTER", $currentPlayer, "index=MYALLY-" . $ally->Index());
           AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose a card to restore 1 (Remaining: " . (8-$i) . ")", $i == 0 ? 0 : 1);
           AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
           AddDecisionQueue("MZOP", $currentPlayer, "RESTORE,1", 1);
@@ -3513,8 +3523,8 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       }
       break;
     case "3514010297"://Mandalorian Armor
-      $ally = new Ally($target, $currentPlayer);
-      if(TraitContains(GetMZCard($currentPlayer, $target), "Mandalorian", $currentPlayer, $ally->Index())) {
+      $ally = new Ally($target);
+      if(TraitContains(GetMZCard($ally->PlayerID(), $target), "Mandalorian", $ally->PlayerID(), $ally->Index())) {
         $ally->Attach("8752877738");//Shield Token
       }
       break;
@@ -4573,7 +4583,7 @@ function PlayRequiresTarget($cardID)
     case "8981523525": return 6;//Moment of Peace
     case "0867878280": return 6;//It Binds All Things
     case "2587711125": return 6;//Disarm
-    case "6515891401": return 6;//Karabast
+    case "6515891401": return 7;//Karabast
     case "2651321164": return 6;//Tactical Advantage
     case "1900571801": return 7;//Overwhelming Barrage
     case "7861932582": return 6;//The Force is With Me
