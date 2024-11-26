@@ -65,13 +65,14 @@ function PlayCaptive($player, $target="")
   AddDecisionQueue("OP", $player, "PLAYCAPTIVE", 1);
 }
 
-function RescueUnit($player, $target="")
+function RescueUnit($player, $target="", $may=false)
 {
   AddDecisionQueue("PASSPARAMETER", $player, $target);
   AddDecisionQueue("SETDQVAR", $player, 0);
   AddDecisionQueue("MZOP", $player, "GETCAPTIVES");
   AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to rescue");
-  AddDecisionQueue("CHOOSECARD", $player, "<-", 1);
+  if($may) AddDecisionQueue("MAYCHOOSECARD", $player, "<-", 1);
+  else AddDecisionQueue("CHOOSECARD", $player, "<-", 1);
   AddDecisionQueue("OP", $player, "RESCUECAPTIVE", 1);
 }
 
@@ -143,6 +144,11 @@ function HasMoreUnits($player) {
   $allies = &GetAllies($player);
   $theirAllies = &GetAllies($player == 1 ? 2 : 1);
   return count($allies) > count($theirAllies);
+}
+
+function HasFewerUnits($player) {
+  $otherPlayer = $player == 1 ? 2 : 1;
+  return HasMoreUnits($otherPlayer);
 }
 
 function CopyCurrentTurnEffectsFromAfterResolveEffects()
@@ -677,6 +683,16 @@ function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $targe
       AddDecisionQueue("MZOP", $player, "REST", 1);
       AddDecisionQueue("EXHAUSTCHARACTER", $player, FindCharacterIndex($player, "9005139831"), 1);
       break;
+    case "2358113881"://Quinlan Vos
+      $allies = &GetAllies($player);
+      if(count($allies) == 0) break;
+      $cost = CardCost($allies[count($allies) - AllyPieces()]);
+      AddDecisionQueue("MULTIZONEINDICES", $player, "THEIRALLY:minCost=" . $cost . ";maxCost=" . $cost);
+      AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to deal 1 damage", 1);
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1", 1);
+      AddDecisionQueue("EXHAUSTCHARACTER", $player, FindCharacterIndex($player, "2358113881"), 1);
+      break;
     case "4935319539"://Krayt Dragon
       $otherPlayer = ($player == 1 ? 2 : 1);
       $damage = CardCost($target);
@@ -916,4 +932,24 @@ function BlackOne($player) {
   AddDecisionQueue("DRAW", $player, "-", 1);
   AddDecisionQueue("DRAW", $player, "-", 1);
   
+}
+
+function TheyControlMoreUnits($player) {
+  $otherPlayer = $player == 1 ? 2 : 1;
+  if(count(GetAllies($player)) < count(GetAllies($otherPlayer))) return true;
+  return false;
+}
+
+function IsCoordinateActive($player) {
+  $units = &GetAllies($player);
+  return count($units)/AllyPieces() >= 3;
+}
+
+function ObiWansAethersprite($player, $index) {
+  AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:arena=Space&THEIRALLY:arena=Space", 1);
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to deal 2 damage to (or pass)", 1);
+  AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+  AddDecisionQueue("MZOP", $player, "DEALDAMAGE,2", 1);
+  AddDecisionQueue("PASSPARAMETER", $player, "MYALLY-" . $index, 1);
+  AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1", 1);
 }

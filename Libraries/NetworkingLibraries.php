@@ -871,7 +871,7 @@ function ResolveChainLink()
     $excess = $totalAttack - $defender->Health();
     $destroyed = $defender->DealDamage($totalAttack, bypassShield:HasSaboteur($attackerID, $mainPlayer, $attacker->Index()), fromCombat:true, damageDealt:$combatChainState[$CCS_DamageDealt]);
     if($destroyed) ClearAttackTarget();
-    if($attackerArr[0] == "MYALLY" && (!$destroyed || ($combatChain[0] != "9500514827" && $combatChain[0] != "4328408486" && !SearchCurrentTurnEffects("8297630396", $mainPlayer)))) { //Han Solo shoots first; also Incinerator Trooper
+    if($attackerArr[0] == "MYALLY" && (!$destroyed || !ShouldCombatDamageFirst())) {
       $attackerDestroyed = $attacker->DealDamage($defenderPower, fromCombat:true);
       if($attackerDestroyed) {
         ClearAttacker();
@@ -899,6 +899,14 @@ function ResolveChainLink()
     ArquitensAssaultCruiser($mainPlayer);
   }
   ProcessDecisionQueue();
+}
+
+function ShouldCombatDamageFirst() {
+  global $combatChain, $mainPlayer, $CS_NumEventsPlayed;
+  if($combatChain[0] == "9500514827" || $combatChain[0] == "4328408486") return true;//Han Solo shoots first; also Incinerator Trooper
+  if(SearchCurrentTurnEffects("8297630396", $mainPlayer)) return true;
+  if($combatChain[0] == "f8e0c65364" && GetClassState($mainPlayer, $CS_NumEventsPlayed) > 0) return true;//Asajj Ventress
+  return false;
 }
 
 function ResolveCombatDamage($damageDone)
@@ -1329,11 +1337,13 @@ function PlayCard($cardID, $from, $dynCostResolved = -1, $index = -1, $uniqueID 
     AddMemory($cardID, $currentPlayer, "HAND", "DOWN");
   }
   $resourceCards = &GetResourceCards($currentPlayer);
+  $resourcesPaid = 0;
   for($i = 0; $i < count($resourceCards); $i += ResourcePieces()) {
     if($resources[1] == 0) break;
     if($resourceCards[$i+4] == "0") {
       $resourceCards[$i+4] = "1";
       --$resources[1];
+      ++$resourcesPaid;
     }
   }
   if($resources[1] > 0) {
@@ -1353,7 +1363,7 @@ function PlayCard($cardID, $from, $dynCostResolved = -1, $index = -1, $uniqueID 
     return; //We know we need to pitch more, short circuit here
   }
   $resources[0] -= $resources[1];
-  $resourcesPaid = GetClassState($currentPlayer, $CS_DynCostResolved);
+  if(DynamicCost($cardID) != "") $resourcesPaid = GetClassState($currentPlayer, $CS_DynCostResolved);
   $resources[1] = 0;
   if($turn[0] == "P") {
     $turn[0] = $turn[2];
@@ -1467,6 +1477,24 @@ function AddPrePitchDecisionQueue($cardID, $from, $index = -1, $skipAbilityType 
       }
     }
   }
+  if($from != "PLAY") {
+    $exploitAmount = ExploitAmount($cardID, $currentPlayer, reportMode:false);
+    for($i = 0; $i < $exploitAmount; ++$i) {
+      AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY");
+      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose a unit to exploit");
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
+      AddDecisionQueue("SETDQVAR", $currentPlayer, "0", 1);
+      AddDecisionQueue("MZOP", $currentPlayer, "GETCARDID", 1);
+      AddDecisionQueue("SETDQVAR", $currentPlayer, "1", 1);
+      AddDecisionQueue("PASSPARAMETER", $currentPlayer, "{0}", 1);
+      AddDecisionQueue("MZOP", $currentPlayer, "DESTROY", 1);
+      AddDecisionQueue("ADDCURRENTEFFECT", $currentPlayer, "6772128891", 1);//Exploit effect
+      if($cardID == "8655450523") {//Count Dooku"
+        AddDecisionQueue("PASSPARAMETER", $currentPlayer, "{1}", 1);
+        AddDecisionQueue("SPECIFICCARD", $currentPlayer, "COUNTDOOKU_TWI", 1);
+      }
+    }
+  }
   switch ($cardID) {
     case "9644107128"://Bamboozle
       if(SearchCount(SearchHand($currentPlayer, aspect:"Cunning")) > 0) {
@@ -1493,6 +1521,11 @@ function AddPrePitchDecisionQueue($cardID, $from, $index = -1, $skipAbilityType 
     case "7262314209"://Mission Briefing
       AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose player to draw 2 cards");
       AddDecisionQueue("BUTTONINPUTNOPASS", $currentPlayer, "Yourself,Opponent");
+      AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts);
+      break;
+    case "0633620454"://Synchronized Strike
+      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose an arena");
+      AddDecisionQueue("BUTTONINPUTNOPASS", $currentPlayer, "Ground,Space");
       AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts);
       break;
     default:

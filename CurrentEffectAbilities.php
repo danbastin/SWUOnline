@@ -130,6 +130,8 @@ function EffectAttackModifier($cardID, $playerID="")
     case "3038238423": return 2;//Fleet Lieutenant
     case "9757839764": return 2;//Adelphi Patrol Wing
     case "3208391441": return -2;//Make an Opening
+    case "4036958275": return -4;//Hello There
+    case "5013214638": return -2;//Equalize
     case "9999079491": return -2;//Mystic Reflection
     case "6432884726": return 2;//Steadfast Battalion
     case "8244682354": return -1;//Jyn Erso
@@ -173,6 +175,23 @@ function EffectAttackModifier($cardID, $playerID="")
       $modifier = $playerID == $defPlayer ? -2 : 2;
       return CardArenas($ally->CardID()) == "Ground" ? $modifier : 0;
     case "3399023235": return isset($subparam) && $subparam == "2" ? -2 : 0;//Fenn Rau
+    case "8777351722": return IsAllyAttackTarget() ? 2 : 0;;//Anakin Skywalker Leader
+    case "4910017138": return 2;//Breaking In
+    case "8929774056": return 1;//Asajj Ventress
+    case "2155351882": return 1;//Ahsoka Tano
+    case "6436543702": return -2;//Providence Destroyer
+    case "7000286964": return -1;//Vulture Interceptor Wing
+    case "0249398533": return 2;//Obedient Vanguard
+    case "1686059165": return 2;//Wat Tambor
+    case "12122bc0b1": return 2;//Wat Tambor
+    case "2395430106": return 2;//Republic Tactical Officer
+    case "3381931079": return -4;//Malevolence
+    case "5333016146": return -1;//Rune Haako
+    case "fb7af4616c": return 1;//General Grievous
+    case "3556557330": return 3;//Asajj Ventress
+    case "8418001763": return 2;//Huyang
+    case "0216922902": return -5;//The Zillo Beast
+    case "7979348081": return 1;//Kraken
     default: return 0;
   }
 }
@@ -337,6 +356,18 @@ function CurrentEffectCostModifiers($cardID, $from, $reportMode=false)
         case "7642980906"://Stolen Landspeeder
           $costModifier -= 99;
           $remove = false;
+          break;
+        case "6772128891"://Exploit Effect
+          $costModifier -= 2;
+          $remove = true;
+          break;
+        case "6849037019"://Now There Are Two of Them
+          $costModifier -= 5;
+          $remove = true;
+          break;
+        case "0414253215"://General's Blade
+          $costModifier -= 2;
+          $remove = true;
           break;
         default: break;
       }
@@ -577,6 +608,13 @@ function CurrentEffectEndTurnAbilities()
       case "4002861992"://DJ (Blatant Thief)
         AddNextTurnEffect($currentTurnEffects[$i], $currentTurnEffects[$i + 1]);
         break;
+      case "8418001763"://Huyang
+        if(SearchAlliesForCard($currentTurnEffects[$i+1], "8418001763")) {
+          AddNextTurnEffect($currentTurnEffects[$i], $currentTurnEffects[$i + 1], $currentTurnEffects[$i + 2]);
+          $target = new Ally("MYALLY-" . SearchAlliesForUniqueID($currentTurnEffects[$i+2], $currentTurnEffects[$i+1]), $currentTurnEffects[$i+1]);
+          $target->AddRoundHealthModifier(2);
+        }
+        break;
       default: break;
     }
     if($remove) RemoveCurrentTurnEffect($i);
@@ -667,6 +705,14 @@ function IsCombatEffectActive($cardID)
     case "4085341914": return true;//Heroic Resolve
     case "5896817672": return true;//Headhunting
     case "6962053552": return true;//Desperate attack
+    case "3399023235"://Fenn Rau
+    case "8777351722"://Anakin Skywalker Leader
+    case "4910017138"://Breaking In
+    case "8929774056"://Asajj Ventress
+    case "2155351882"://Ahsoka Tano
+    case "6669050232"://Grim Resolve
+    case "2395430106"://Republic Tactical Officer
+      return true;
     default: return false;
   }
 }

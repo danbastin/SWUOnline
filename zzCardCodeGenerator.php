@@ -49,10 +49,18 @@
       else if($cardNumber < 100) $cardNumber = "0" . $cardNumber;
       $set = $card->expansion->data->attributes->code;
       $cardID= $set . "_" . $cardNumber;
-      //$cardID = "SOR_" . $cardNumber;
+      switch($card->cardUid) {
+        case "3463348370"://Battle droid
+          $cardID = "TWI_T01";
+          break;
+        case "3941784506"://Clone Trooper
+          $cardID = "TWI_T02";
+          break;
+      }
       AddToTries($cardID, $card->cardUid);
 
       $definedType = $card->type->data->attributes->name;
+      if($definedType == "Token Unit") $definedType = "Unit";
       $imageUrl = $card->artFront->data->attributes->formats->card->url;
 
       //$imageUrl = "https://swudb.com/cards/" . $set . "/" . $cardNumber . ".png";
@@ -131,7 +139,9 @@
     AddToTrie($costTrie, $uuid, 0, $card->cost);
     AddToTrie($hpTrie, $uuid, 0, $card->hp);
     AddToTrie($powerTrie, $uuid, 0, $card->power);
-    AddToTrie($typeTrie, $uuid, 0, $card->type->data->attributes->name);
+    $definedType = $card->type->data->attributes->name;
+    if($definedType == "Token Unit") $definedType = "Unit";
+    AddToTrie($typeTrie, $uuid, 0, $definedType);
     AddToTrie($setTrie, $uuid, 0, $card->expansion->data->attributes->code);
     if($card->type2->data != null) {
       $type2 = $card->type2->data->attributes->name;

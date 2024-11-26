@@ -180,6 +180,34 @@ function ModalAbilities($player, $card, $lastResult)
         default: break;
       }
       return 1;
+    case "POLITICALPRESSURE":
+      switch($lastResult) {
+        case "Discard_Random":
+          DiscardRandom($player, "3357486161");
+          break;
+        case "Battle_Droids":
+          $otherPlayer = ($player == 1 ? 2 : 1);
+          PlayAlly("3463348370", $otherPlayer);//Battle Droid
+          PlayAlly("3463348370", $otherPlayer);//Battle Droid
+          break;
+        default: break;
+      }
+      return 1;
+    
+    case "MANUFACTUREDSOLDIERS":
+      switch($lastResult) {
+        case "Clone_Troopers":
+          PlayAlly("3941784506", $player);//Clone Trooper
+          PlayAlly("3941784506", $player);//Clone Trooper
+          break;
+        case "Battle_Droids":
+          PlayAlly("3463348370", $player);//Battle Droid
+          PlayAlly("3463348370", $player);//Battle Droid
+          PlayAlly("3463348370", $player);//Battle Droid
+          break;
+        default: break;
+      }
+      return 1;
     default: return "";
   }
 }
@@ -569,6 +597,35 @@ function SpecificCardLogic($player, $card, $lastResult)
         WriteLog("Player $otherPlayer drew a card from Yoda, Old Master");
         Draw($otherPlayer);
       }
+      break;
+    case "PRISONEROFWAR":
+      $capturer = new Ally("MYALLY-" . SearchAlliesForUniqueID($dqVars[0], $player), $player);
+      if(CardCost($lastResult) < CardCost($capturer->CardID())) {
+        PlayAlly("3463348370", $player);//Battle Droid
+        PlayAlly("3463348370", $player);//Battle Droid
+      }
+      break;
+    case "COUNTDOOKU_TWI":
+      $power = CardPower($lastResult);
+      AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY", 1);
+      AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to deal " . $power . " damage to", 1);
+      AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("MZOP", $player, "DEALDAMAGE," . $power, 1);
+      break;
+    case "LETHALCRACKDOWN":
+      DealDamageAsync($player, CardPower($lastResult), "DAMAGE", "1389085256");
+      break;
+    case "TWI_PALPATINE_HERO":
+      Draw($player);
+      Restore(2, $player);
+      $char = &GetPlayerCharacter($player);
+      $char[CharacterPieces()] = "ad86d54e97";
+      break;
+    case "TWI_DARTHSIDIOUS_HERO":
+      PlayAlly("3941784506", $player);//Clone Trooper
+      DealDamageAsync(($player == 1 ? 2 : 1), 2, "DAMAGE", "ad86d54e97");
+      $char = &GetPlayerCharacter($player);
+      $char[CharacterPieces()] = "0026166404";
       break;
     default: return "";
   }
