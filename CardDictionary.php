@@ -270,7 +270,7 @@ function HasSentinel($cardID, $player, $index)
       case "9070397522": return false;//SpecForce Soldier
       case "2872203891": $hasSentinel = true; break;//General Grievous
       case "fb7af4616c": $hasSentinel = true; break;//General Grievous
-      case "1039828081": $hasSentinel = true; break;//Calculating MagnaGuard
+      case "1039828081": if ($cardID == "1039828081") {$hasSentinel = true;} break;//Calculating MagnaGuard
       case "3033790509": $hasSentinel = true; break;//Captain Typho
       default: break;
     }
@@ -441,6 +441,11 @@ function HasOverwhelm($cardID, $player, $index)
       case "6461101372": return true;//Maul
       default: break;
     }
+  }
+  // Check upgrades
+  $upgrades = $ally->GetUpgrades();
+  for($i=0; $i<count($upgrades); $i+=SubcardPieces()) {
+    if($upgrades[$i] == "0875550518") return true;//Grievous's Wheel Bike
   }
   switch($cardID)
   {
@@ -897,8 +902,8 @@ function GetAbilityTypes($cardID, $index = -1, $from="-")
     case "1686059165"://Wat Tambor
       $abilityTypes = "A";
       break;
-    case "0026166404"://Emperor Palpatine
-    case "ad86d54e97"://Darth Sidious
+    case "0026166404"://Chancellor Palpatine Leader
+    case "ad86d54e97"://Darth Sidious Leader
       $abilityTypes = "A";
       break;
     case "7734824762"://Captain Rex
@@ -1112,8 +1117,8 @@ function GetAbilityNames($cardID, $index = -1, $validate=false)
     case "7734824762"://Captain Rex
       $abilityNames = "Clone";
       break;
-    case "0026166404"://Emperor Palpatine
-    case "ad86d54e97"://Darth Sidious
+    case "0026166404"://Chancellor Palpatine Leader
+    case "ad86d54e97"://Darth Sidious Leader
       $abilityNames = "Activate";
       break;
     case "4628885755"://Mace Windu
@@ -1249,7 +1254,7 @@ function GetAbilityNames($cardID, $index = -1, $validate=false)
     $char = &GetPlayerCharacter($currentPlayer);
     if($char[CharacterPieces() + 1] == 1) $abilityNames = "";
     if($char[CharacterPieces() + 2] == 0) {
-      //Emperor Palpatine + Darth Sidious
+      //Chancellor Palpatine Leader + Darth Sidious Leader
       if($char[CharacterPieces()] != "0026166404" && $char[CharacterPieces()] != "ad86d54e97") {
         if($abilityNames != "") $abilityNames .= ",";
         $abilityNames .= "Deploy";
@@ -1393,6 +1398,7 @@ function UpgradeFilter($cardID)
     case "6410481716"://Mace Windu's Lightsaber
     case "0414253215"://General's Blade
     case "0741296536"://Ahsoka's Padawan Lightsaber
+    case "0875550518"://Grievous's Wheel Bike
       return "trait=Vehicle";
     case "3987987905"://Hardpoint Heavy Blaster
     case "7280213969"://Smuggling Compartment

@@ -319,7 +319,7 @@ function MainCharacterPlayCardAbilities($cardID, $from)
         }
         break;
       case "2358113881"://Quinlan Vos
-        if($from != "EQUIP" && DefinedTypesContains($cardID, "Unit", $currentPlayer)) {
+        if($from != 'PLAY' && $from != "EQUIP" && DefinedTypesContains($cardID, "Unit", $currentPlayer)) {
           AddLayer("TRIGGER", $currentPlayer, "2358113881", append:true);
         }
         break;
@@ -1810,11 +1810,14 @@ function SelfCostModifier($cardID, $from)
     $targetID = GetMZCard($currentPlayer, $mzIndex);
   } else {
     if(SearchAlliesForCard($currentPlayer, "4166047484") != "") $targetID = "4166047484";
+    else if(SearchAlliesForCard($currentPlayer, "fb7af4616c") != "") $targetID = "fb7af4616c";
+    else if(SearchAlliesForCard($currentPlayer, "4776553531") != "") $targetID = "4776553531";
     else if($cardID == "3141660491") $targetID = "4088c46c4d";
     else $targetID = "";
   }
   if(DefinedTypesContains($cardID, "Upgrade", $currentPlayer)) {
     if($targetID == "4166047484") $modifier -= 1;//Guardian of the Whills
+    if($cardID == "0875550518" && ($targetID == "fb7af4616c" || $targetID == "4776553531")) $modifier -= 2;//Grievous's Wheel Bike
     if($cardID == "3141660491" && $targetID != "" && $penalty > 0) {//The Darksaber
       $isMando = TraitContains($targetID, "Mandalorian", $currentPlayer, isset($mzIndex) && $mzIndex != "-" ? explode("-", $mzIndex)[1] : -1);
       if($isMando) {
@@ -1865,6 +1868,13 @@ function PlayerAspects($player)
     $cardAspects = explode(",", CardAspects($char[$i]));
     for($j=0; $j<count($cardAspects); ++$j) {
       ++$aspects[$cardAspects[$j]];
+    }
+
+    // Special case
+    if ($char[$i] == '0026166404') { //Chancellor Palpatine Leader
+      $aspects["Villainy"] = 0;
+    } else if ($char[$i] == 'ad86d54e97') { //Darth Sidious Leader
+      $aspects["Heroism"] = 0;
     }
   }
   $leaderIndex = SearchAllies($player, definedType:"Leader");
@@ -2185,7 +2195,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
         case "7734824762"://Captain Rex
           PlayAlly("3941784506", $currentPlayer);//Clone Trooper
           break;
-        case "2847868671"://Yoda
+        case "2847868671"://Yoda Leader
         $deck = &GetDeck($currentPlayer);
         if(count($deck) > 0) {
           AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose if you want to discard a card to Yoda");
@@ -2196,6 +2206,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
           AddDecisionQueue("MZOP", $currentPlayer, "GETCARDCOST", 1);
           AddDecisionQueue("SETDQVAR", $currentPlayer, "0", 1);
           AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "THEIRALLY:maxCost={0}", 1);
+          AddDecisionQueue("MZFILTER", $currentPlayer, "definedType=Leader");
           AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose a unit to destroy");
           AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
           AddDecisionQueue("MZOP", $currentPlayer, "DESTROY", 1);
@@ -3071,7 +3082,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
         AddDecisionQueue("MZOP", $currentPlayer, "REDUCEHEALTH,2", 1);
         AddDecisionQueue("MZOP", $currentPlayer, "GETUNIQUEID", 1);
         AddDecisionQueue("ADDLIMITEDCURRENTEFFECT", $currentPlayer, "5013214638,PLAY", 1);
-        
+
         if (!HasFewerUnits($currentPlayer)) {
           break;
         }
@@ -4649,7 +4660,6 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       PummelHit($currentPlayer, may:true);
       AddDecisionQueue("SEARCHDECKTOPX", $currentPlayer, "3;1;", 1);
       AddDecisionQueue("ADDHAND", $currentPlayer, "-", 1);
-      AddDecisionQueue("REVEALCARDS", $currentPlayer, "-", 1);
       break;
     case "4910017138"://Breaking In
       AddDecisionQueue("MULTIZONEINDICES", $currentPlayer, "MYALLY");
@@ -4738,6 +4748,7 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
     case "8061497086"://Perilous Position
       $ally = new Ally($target, MZPlayerID($currentPlayer, $target));
       $ally->Exhaust();
+      $ally->DefeatIfNoRemainingHP();
       break;
     case "8345985976"://Trade Federation Shuttle
       if(SearchCount(SearchAllies($currentPlayer, damagedOnly:true))) PlayAlly("3463348370", $currentPlayer);//Battle Droid
@@ -4796,12 +4807,12 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
       AddDecisionQueue("MZOP", $currentPlayer, "DEALDAMAGE,1", 1);
       break;
-    case "0026166404"://Emperor Palpatine
+    case "0026166404"://Chancellor Palpatine Leader
       AddDecisionQueue("YESNO", $currentPlayer, "if a Heroism unit died this turn");
       AddDecisionQueue("NOPASS", $currentPlayer, "-");
       AddDecisionQueue("SPECIFICCARD", $currentPlayer, "TWI_PALPATINE_HERO", 1);
       break;
-    case "ad86d54e97"://Darth Sidious
+    case "ad86d54e97"://Darth Sidious Leader
       AddDecisionQueue("YESNO", $currentPlayer, "if you played a Villainy unit this turn");
       AddDecisionQueue("NOPASS", $currentPlayer, "-");
       AddDecisionQueue("SPECIFICCARD", $currentPlayer, "TWI_DARTHSIDIOUS_HERO", 1);
@@ -5000,12 +5011,17 @@ function PlayAbility($cardID, $from, $resourcesPaid, $target = "-", $additionalC
       AddDecisionQueue("MZFILTER", $currentPlayer, "index=MYALLY-" . $playAlly->Index());
       AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose a unit to give +2/+2");
       AddDecisionQueue("MAYCHOOSEMULTIZONE", $currentPlayer, "<-", 1);
-      AddDecisionQueue("MZOP", $currentPlayer, "ADDHEALTH,2", 1);
       AddDecisionQueue("MZOP", $currentPlayer, "GETUNIQUEID", 1);
       AddDecisionQueue("ADDLIMITEDCURRENTEFFECT", $currentPlayer, "8418001763,PLAY", 1);
       break;
     case "0216922902"://The Zillo Beast
-      AddCurrentTurnEffect("0216922902", $currentPlayer == 1 ? 2 : 1, "PLAY");
+      $otherPlayer = $currentPlayer == 1 ? 2 : 1;
+      $theirAllies = &GetTheirAllies($currentPlayer);
+      for ($i = 0; $i < count($theirAllies); $i += AllyPieces()) {
+        if (CardArenas($theirAllies[$i]) == "Ground") {
+          AddCurrentTurnEffect("0216922902", $otherPlayer, "PLAY", $theirAllies[$i+5]);
+        }
+      }
       break;
     case "2870878795"://Padme Amidala
       if(IsCoordinateActive($currentPlayer)) {
