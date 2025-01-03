@@ -219,9 +219,23 @@ function SearchDiscardForCard($player, $card1, $card2 = "", $card3 = "")
   return $cardList;
 }
 
+
+function GetAllyCount($player) {
+  $units = &GetAllies($player);
+  return count($units)/AllyPieces();
+}
+
 function PlayerHasAlly($player, $cardID)
 {
-  return SearchAlliesForCard($player, $cardID) != "";
+  $allies = &GetAllies($player);
+  for ($i = 0; $i < count($allies); $i += AllyPieces()) {
+    $id = $allies[$i];
+    if ($id == $cardID) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function SearchAlliesForCard($player, $card1, $card2 = "", $card3 = "")
@@ -246,6 +260,30 @@ function SearchAlliesForTitle($player, $title)
     if (CardTitle($allies[$i]) == $title) {
       if ($cardList != "") $cardList = $cardList . ",";
       $cardList = $cardList . $i;
+    }
+  }
+  return $cardList;
+}
+
+function SearchAlliesUniqueIDForTrait($player, $trait) {
+  $allies = &GetAllies($player);
+  $cardList = [];
+  for ($i = 0; $i < count($allies); $i += AllyPieces()) {
+    if (TraitContains($allies[$i], $trait)) {
+      $cardList[] = $allies[$i + 5];
+    }
+  }
+  return implode(',', $cardList);
+}
+
+function SearchAlliesUniqueIDForTitle($player, $title)
+{
+  $allies = &GetAllies($player);
+  $cardList = "";
+  for ($i = 0; $i < count($allies); $i += AllyPieces()) {
+    if (CardTitle($allies[$i]) == $title) {
+      if ($cardList != "") $cardList = $cardList . ",";
+      $cardList = $cardList . $allies[$i + 5];
     }
   }
   return $cardList;
@@ -362,7 +400,8 @@ function SearchCurrentTurnEffects($cardID, $player, $remove = false)
 {
   global $currentTurnEffects;
   for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
-    if ($currentTurnEffects[$i] == $cardID && $currentTurnEffects[$i + 1] == $player) {
+    $currentCardID = explode("_", $currentTurnEffects[$i])[0];
+    if ($currentCardID == $cardID && $currentTurnEffects[$i + 1] == $player) {
       if ($remove) RemoveCurrentTurnEffect($i);
       return true;
     }
@@ -370,32 +409,37 @@ function SearchCurrentTurnEffects($cardID, $player, $remove = false)
   return false;
 }
 
-function GetCurrentTurnEffects($cardID, $player, $remove = false)
+function GetCurrentTurnEffects($cardID, $player, $uniqueID = -1, $remove = false)
 {
   global $currentTurnEffects;
-  $rv = [];
   for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
-    if ($currentTurnEffects[$i] == $cardID && $currentTurnEffects[$i + 1] == $player) {
+    $currentCardID = explode("_", $currentTurnEffects[$i])[0];
+    $currentUniqueID = $currentTurnEffects[$i + 2];
+    if ($currentCardID == $cardID && $currentTurnEffects[$i + 1] == $player && ($uniqueID == -1 || $uniqueID == $currentUniqueID)) {
       $turnEffect = array_slice($currentTurnEffects, $i, CurrentTurnEffectPieces());
-      $rv = array_slice($currentTurnEffects, $i, CurrentTurnEffectPieces());
       if ($remove) RemoveCurrentTurnEffect($i);
-      return $rv;
+      return $turnEffect;
     }
   }
-  return false;
+  return null;
 }
 
-function SearchLimitedCurrentTurnEffects($cardID, $player, $remove = false)
+function SearchLimitedCurrentTurnEffects($cardID, $player, $uniqueID = -1, $remove = false)
 {
   global $currentTurnEffects;
   for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
-    if ($currentTurnEffects[$i] == $cardID && $currentTurnEffects[$i + 1] == $player) {
-      $uniqueID = $currentTurnEffects[$i + 2];
+    $currentCardID = explode("_", $currentTurnEffects[$i])[0];
+    $currentUniqueID = $currentTurnEffects[$i + 2];
+    if ($currentCardID == $cardID && $currentTurnEffects[$i + 1] == $player && ($uniqueID == -1 || $uniqueID == $currentUniqueID)) {
       if ($remove) RemoveCurrentTurnEffect($i);
-      return $uniqueID;
+      return $currentUniqueID;
     }
   }
   return -1;
+}
+
+function AnyPlayerHasAlly($cardID){
+  return PlayerHasAlly(1, $cardID) || PlayerHasAlly(2, $cardID);
 }
 
 function SearchCurrentTurnEffectsForCycle($card1, $card2, $card3, $player)
@@ -646,8 +690,7 @@ function SearchItemsForUniqueID($uniqueID, $player)
 function UnitUniqueIDController($uniqueID) {
   if(SearchAlliesForUniqueID($uniqueID, 1) > -1) return 1;
   if(SearchAlliesForUniqueID($uniqueID, 2) > -1) return 2;
-  //TODO: This is an error; handle more gracefully?
-  return 1;
+  return -1;
 }
 
 function SearchAlliesForUniqueID($uniqueID, $player): int
@@ -663,9 +706,11 @@ function SearchCurrentTurnEffectsForUniqueID($uniqueID)
 {
   global $currentTurnEffects;
   for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
-    if ($currentTurnEffects[$i + 2] == $uniqueID) return $i;
+    if ($currentTurnEffects[$i + 2] == $uniqueID) {
+      return true;
+    }
   }
-  return -1;
+  return false;
 }
 
 function SearchUniqueIDForCurrentTurnEffects($index)

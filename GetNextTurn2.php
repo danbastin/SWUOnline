@@ -50,12 +50,16 @@ $opponentInactive = false;
 $currentTime = round(microtime(true) * 1000);
 if ($isGamePlayer) {
   $playerStatus = intval(GetCachePiece($gameName, $playerID + 3));
-  if ($playerStatus == "-1") WriteLog("Player $playerID has connected.");
+  if ($playerStatus == "-1") {
+    SetCachePiece($gameName, $playerID + 14, 0);
+    WriteLog("Player $playerID has connected.");
+  }
   SetCachePiece($gameName, $playerID + 1, $currentTime);
   SetCachePiece($gameName, $playerID + 3, "0");
-  if ($playerStatus > 0) {
+  if ($playerStatus > 0 || GetCachePiece($gameName, $playerID + 14) > 0) {
     WriteLog("Player $playerID has reconnected.");
     SetCachePiece($gameName, $playerID + 3, "0");
+    SetCachePiece($gameName, $playerID + 14, 0);
     GamestateUpdated($gameName);
   }
 }
@@ -73,10 +77,23 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     $otherP = ($playerID == 1 ? 2 : 1);
     $oppLastTime = intval($cacheArr[$otherP]);
     $oppStatus = $cacheArr[$otherP + 2];
-    if (($currentTime - $oppLastTime) > 20000 && ($oppStatus == "0")) {
+    $timeDiff = $currentTime - $oppLastTime;
+    $otherPlayerDisconnectStatus = GetCachePiece($gameName, $otherP + 14);
+    if ($timeDiff > 30_000 && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
+      WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>Player $otherP, are you still there? Your opponent will be allowed to claim victory in 30 seconds if no activity is detected.");
+      GamestateUpdated($gameName);
+      IncrementCachePiece($gameName, $otherP + 14);
+    }
+    if ($timeDiff > 55_000 && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
+      WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>5 seconds left, Player $otherP...");
+      IncrementCachePiece($gameName, $otherP + 14);
+      GamestateUpdated($gameName);
+    }
+    if ($timeDiff > 60_000 && $otherPlayerDisconnectStatus == 2 && ($oppStatus == "0")) {
       WriteLog("Opponent has disconnected.");
       $opponentDisconnected = true;
       SetCachePiece($gameName, $otherP + 3, "2");
+      IncrementCachePiece($gameName, $otherP + 14);
       GamestateUpdated($gameName);
     }
     //Handle server timeout
@@ -147,7 +164,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   echo($cacheVal . $returnDelim);
   echo(implode("~", $events) . $returnDelim);
-  
+
   if ($currentPlayer == $playerID) {
     $icon = "ready.png";
     $readyText = "You are the player with priority.";
@@ -268,7 +285,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   if ((CanPassPhase($turn[0]) && $currentPlayer == $playerID) || (IsReplay() && $playerID == 3)) {
     $prompt = "";
-    // Pass Button - Active then Inactive (which is hidden) 
+    // Pass Button - Active then Inactive (which is hidden)
 ?>
     <div title='Space is the shortcut to pass.' <?= ProcessInputLink($playerID, 99, 0, prompt: $prompt) ?> class='passButton'>
     <span class='pass-label'>
@@ -281,9 +298,9 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   <?php
   }
-  
+
   if($turn[0] == "M" && $initiativeTaken != 1 && $currentPlayer == $playerID) echo ("&nbsp;" . CreateButton($playerID, "Claim Initiative", 34, "-", "18px"));
-  
+
   echo ("</div>");
   echo ("</div>");
 
@@ -330,10 +347,10 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   if ($turn[0] == "INSTANT" && count($layers) > 0) {
       $content = "";
-      
+
       // Add a title and instructions for triggers
       $content .= "<div class='trigger-order'><h2>Choose Trigger Order</h2></div>";
-      
+
       // Function to get the caption based on layer type
       function getCaption($layer) {
           $captions = [
@@ -343,7 +360,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
           ];
           return $captions[$layer] ?? ""; // Return the caption if it exists, otherwise return an empty string
       }
-  
+
       // Check if the first layer is an attack or weapon, and if so, get and display the attack target
       if (CardType($layers[0]) == "AA" || IsWeapon($layers[0])) {
           $attackTarget = GetAttackTarget();
@@ -351,49 +368,55 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
               $content .= "&nbsp;Attack Target: " . GetMZCardLink($defPlayer, $attackTarget);
           }
       }
-  
+
       // Add a note about trigger resolution if applicable
       if ($dqState[8] != -1) {
         $content .= "<div class='trigger-order'><p>Use the arrows below to set the order abilities trigger in</p></div>";
       }
-  
+
       // Start the container for the tiles and labels using flexbox
       $content .= "<div class='tiles-wrapper' >";
-  
+
       $totalLayers = count($layers); // Total number of layers
       $layerPieces = LayerPieces();  // Number of pieces per layer
-  
+
       for ($i = 0; $i < $totalLayers; $i += $layerPieces) {
           if ($i == 0) {
               // Add 'First' text before the first tile
               $content .= "<div class='trigger-first'><p>First</p></div>";
           }
-  
+
           $layerName = IsAbilityLayer($layers[$i]) ? $layers[$i + 2] : $layers[$i]; // Get the layer name
           $layerController = $layers[$i + 1]; // Get the layer controller
           $layerColor = ($layerController == $playerID) ? 1 : 2; // Determine the color based on the controller
-          
+
           if ($playerID == 3) { // Special case for playerID 3
               $layerColor = ($layerController == $otherPlayer) ? 2 : 1;
           }
-  
+
           // Count the number of tiles with the same name if the layer is tileable
           $nbTiles = IsTileable($layerName) ? array_reduce($layers, function($count, $layer, $index) use ($layerName, $layerPieces) {
               $name = ($layer == "LAYER" || IsAbilityLayer($layer)) ? $layers[$index + 2] : $layer;
               return $name == $layerName ? $count + 1 : $count;
           }, 0) : 0;
-  
+
           // Get the caption for the current layer
           $caption = getCaption($layers[$i]);
-          
+
           // Determine counters for the card, using number of tiles if tileable, otherwise using the caption
           $counters = IsTileable($layerName) && $nbTiles > 1 ? $nbTiles : ($caption ?: 0);
-  
+
           // Add the card to the content
           $cardId = $layerName;
           if($cardId == "AFTERPLAYABILITY") $cardId = explode(',', $layers[$i+5])[0];
+          if($cardId == "AFTERDESTROYABILITY") $cardId = $layers[$i+3];
+          if($cardId == "AFTERDESTROYFRIENDLYABILITY") $cardId = explode(",", $layers[$i+3])[0];
+          if($cardId == "AFTERDESTROYTHEIRSABILITY") {
+            $cardId = explode(",", $layers[$i+3])[0];
+            $layerColor = $layerColor == 1 ? 2 : 1;
+          }
           $content .= "<div class='tile' style='max-width:{$cardSize}px;'>" . Card($cardId, "concat", $cardSize, 0, 1, 0, $layerColor, $counters, controller: $layerController);
-  
+
           // Add reorder buttons for ability layers if applicable
           if (IsAbilityLayer($layers[$i]) && $dqState[8] >= $i && $playerID == $mainPlayer) {
               if ($i < $dqState[8]) {
@@ -403,21 +426,21 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
                   $content .= "<span class='reorder-button'>" . CreateButton($playerID, "<", 32, $i, "18px", useInput:true) . "</span>";
               }
           }
-          
+
           $content .= "</div>"; // Close the tile container
-  
+
           if ($i + $layerPieces >= $totalLayers) {
               // Add 'Last' text after the last tile
               $content .= "<div class='trigger-last'><p>Last</p></div>";
           }
       }
-  
+
       // Close the container for the tiles and labels
       $content .= "</div>"; // Close the tiles-wrapper
-  
+
       echo CreatePopup("INSTANT", [], 0, 1, "", 1, $content, "./", false, true); // Output the content in a popup
   }
-  
+
   if ($turn[0] == "OVER") {
     if ($roguelikeGameID != "") {
       $caption = (GetHealth($playerID) > 0 ? "Continue Adventure" : "Game Over");
@@ -520,6 +543,20 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     }
     $content .= "</tr></table>";
     echo CreatePopup("CHOOSETOPOPPONENT", [], 0, 1, "Choose " . TypeToPlay($turn[0]), 1, $content);
+  }
+
+  if ($turn[0] == "LOOKHAND" && $turn[1] == $playerID) {
+    $content = "<table style='margin: 0 auto;'><tr>";
+    for ($i = 0; $i < count($theirHand); ++$i) {
+      $content .= "<td>";
+      $content .= Card($theirHand[$i], "concat", $cardSize, 0, 1);
+      $content .= "</td>";
+    }
+    $content .= "</tr></table>";
+    $content .= "<div style='text-align: center;'>";
+    $content .= CreateButton($playerID, "Ok", 99, "OK", "20px");
+    $content .= "</div>";
+    echo CreatePopup("LOOKHAND", [], 0, 1, "Opponent's hand", 1, $content);
   }
 
   if ($turn[0] == "HANDTOPBOTTOM" && $turn[1] == $playerID) {
@@ -731,8 +768,8 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   if($turn[0] == "INPUTCARDNAME" && $turn[1] == $playerID)
   {
-    $caption = "<div>Enter a card name or ID</div>";
-    $content = CreateTextForm($playerID, "Submit", 30);
+    $caption = "<div>Name a card</div>";
+    $content = CreateAutocompleteForm($playerID, "Submit", 30, CardTitles());
     echo CreatePopup("INPUTCARDNAME", [], 0, 1, $caption, 1, $content);
   }
 
@@ -797,7 +834,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       $ally = new Ally($mzIndex, $otherPlayer);
       $playable = NumResourcesAvailable($currentPlayer) >= AbilityCost($ally->CardID(), $ally->Index(), true);
 
-      if(!$mzChooseFromPlay && $playable && TheirAllyPlayableExhausted($ally->CardID())) {
+      if(!$mzChooseFromPlay && $playable && TheirAllyPlayableExhausted($ally)) {
         $border = CardBorderColor($theirAllies[$i], "PLAY", $playable);
         $action = $currentPlayer == $playerID && $turn[0] != "P" && $playable ? 105 : 0; // 105 is the Ally Ability for opponent-controlled abilities like Mercenary Gunship
         $actionDataOverride = strval($i);
@@ -814,7 +851,8 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'subcards' => $theirAllies[$i + 4] != "-" ? explode(",", $theirAllies[$i + 4]) : [],
         'currentPower' => $ally->CurrentPower(),
         'hasSentinel' => HasSentinel($theirAllies[$i], $otherPlayer, $i),
-        'overlay' => $theirAllies[$i + 1] != 2 ? 1 : 0
+        'overlay' => $theirAllies[$i + 1] != 2 ? 1 : 0,
+        'cloned' => $theirAllies[$i + 13] == 1,
       );
       $cardArena = CardArenas($theirAllies[$i]);
       //Their Unit Spacing
@@ -933,12 +971,12 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         $actionDataOverride = $inOptions ? $mzIndex : 0;
         $border = CardBorderColor($myAllies[$i], "PLAY", $action == 16);
       } else {
-        $playable = IsPlayable($myAllies[$i], $turn[0], "PLAY", $i, $restriction) && ($myAllies[$i + 1] == 2 || AllyPlayableExhausted($myAllies[$i]));
+        $playable = IsPlayable($myAllies[$i], $turn[0], "PLAY", $i, $restriction) && ($myAllies[$i + 1] == 2 || AllyPlayableExhausted($ally));
         $border = CardBorderColor($myAllies[$i], "PLAY", $playable);
         $action = $currentPlayer == $playerID && $turn[0] != "P" && $playable ? 24 : 0;
         $actionDataOverride = strval($i);
       }
-      
+
       $opts = array(
         'currentHP' => $ally->Health(),
         'maxHP' => $ally->MaxHealth(),
@@ -950,7 +988,8 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'action' => $action,
         'actionOverride' => $actionDataOverride,
         'border' => $border,
-        'overlay' => $myAllies[$i + 1] != 2 ? 1 : 0
+        'overlay' => $myAllies[$i + 1] != 2 ? 1 : 0,
+        'cloned' => $myAllies[$i + 13] == 1,
       );
       $cardArena = CardArenas($myAllies[$i]);
       //My Unit Spacing

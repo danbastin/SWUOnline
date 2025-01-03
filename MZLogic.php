@@ -135,6 +135,7 @@ function MZAddZone($player, $parameter, $lastResult)
       case "MYBANISH": BanishCardForPlayer($cardIDs[$i], $player, $params[1], $params[2]); break;
       case "MYHAND": AddPlayerHand($cardIDs[$i], $player, "-"); break;
       case "MYRESOURCES": AddResources($cardIDs[$i], $player, "HAND", "DOWN"); break;
+      case "MYRESOURCESEXHAUSTED": AddResources($cardIDs[$i], $player, "-", "DOWN", isExhausted:"1"); break;
       case "MYTOPDECK": AddTopDeck($cardIDs[$i], $player, "-"); break;
       case "MYBOTDECK": AddBottomDeck($cardIDs[$i], $player); break;
       case "THEIRBOTDECK": AddBottomDeck($cardIDs[$i], $otherPlayer); break;
@@ -298,7 +299,7 @@ function MZWakeUp($player, $target)
   $player = (str_starts_with($pieces[0], "MY") ? $player : ($player == 1 ? 2 : 1));
   $zone = &GetMZZone($player, $pieces[0]);
   $targetAlly = new Ally($target, $player);
-  
+
   if(SearchLimitedCurrentTurnEffects("8800836530", $player) == $targetAlly->UniqueID()) { // No Good to me Dead
     return;
   }
@@ -332,9 +333,17 @@ function MZBounce($player, $target)
   $controller = (str_starts_with($mzArr[0], "MY") ? $player : ($player == 1 ? 2 : 1));
   switch($mzArr[0]) {
     case "THEIRALLY": case "MYALLY":
-      $allies = &GetAllies($controller);
-      $owner = $allies[$mzArr[1]+11];
+      $ally = new Ally($target, $controller);
+      $owner = $ally->Owner();
+      $cloned = $ally->IsCloned();
+      if($ally->AvoidsBounce()) {
+        WriteLog(CardLink($ally->CardID(), $ally->CardID()) . " avoided bounce.");
+        break;
+      }
       $cardID = RemoveAlly($controller, $mzArr[1]);
+      if ($cloned) {
+        $cardID = "0345124206"; //Clone - Replace the cloned card to the original card when bouncing back
+      }
       IncrementClassState($controller, $CS_NumLeftPlay);
       $index = AddHand($owner, $cardID);
       return $player == $owner ? "MYHAND-" . $index : "THEIRHAND-" . $index;

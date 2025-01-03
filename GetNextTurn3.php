@@ -828,6 +828,16 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     $playerInputPopup->popup = CreatePopupAPI("INPUTCARDNAME", [], 0, 1, "Name a card");
   }
 
+  if ($turn[0] == "LOOKHAND" && $turn[1] == $playerID) {
+    $playerInputPopup->active = true;
+    $cardsArray = array();
+    for ($i = 0; $i < count($theirHand); ++$i) {
+      $cardsArray[] = JSONRenderedCard($theirHand[$i], action: 0);
+    }
+    $playerInputButtons[] = CreateButtonAPI($playerID, "Ok", 99, "OK", "20px");
+    $playerInputPopup->popup = CreatePopupAPI("LOOKHAND", [], 0, 1, "Oponnent's hand", cardsArray: $cardsArray);
+  }
+
   if ($turn[0] == "HANDTOPBOTTOM" && $turn[1] == $playerID) {
     $playerInputPopup->active = true;
     $cardsArray = array();
@@ -929,12 +939,12 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       if ($option[0] == "THEIRALLY") {
         $lifeCounters = $theirAllies[$index + 2];
         $enduranceCounters = $theirAllies[$index + 6];
-        if (SearchCurrentTurnEffectsForUniqueID($theirAllies[$index + 5]) != -1) $attackCounters = EffectAttackModifier(SearchUniqueIDForCurrentTurnEffects($theirAllies[$index + 5])) + AttackValue($theirAllies[$index]);
+        if (SearchCurrentTurnEffectsForUniqueID($theirAllies[$index + 5])) $attackCounters = EffectAttackModifier(SearchUniqueIDForCurrentTurnEffects($theirAllies[$index + 5])) + AttackValue($theirAllies[$index]);
         else $attackCounters = 0;
       } elseif ($option[0] == "MYALLY") {
         $lifeCounters = $myAllies[$index + 2];
         $enduranceCounters = $myAllies[$index + 6];
-        if (SearchCurrentTurnEffectsForUniqueID($myAllies[$index + 5]) != -1) $attackCounters = EffectAttackModifier(SearchUniqueIDForCurrentTurnEffects($myAllies[$index + 5])) + AttackValue($myAllies[$index]);
+        if (SearchCurrentTurnEffectsForUniqueID($myAllies[$index + 5])) $attackCounters = EffectAttackModifier(SearchUniqueIDForCurrentTurnEffects($myAllies[$index + 5])) + AttackValue($myAllies[$index]);
         else $attackCounters = 0;
       }
 

@@ -94,7 +94,7 @@ include_once 'Header.php';
   */
 
   ?>
-  <label for="fabdb"><u><a style='color:lightblue;' href='https://www.swudb.com/' target='_blank'>SWUDB</a></u> or <u><a style='color:lightblue;' href='https://www.sw-unlimited-db.com/' target='_blank'>SW-Unlimited-DB</a></u> Deck Link <span class="secondary">(use the url or 'Deck Link' button)</span></label>
+  <label for="fabdb"><u><a style='color:lightblue;' href='https://www.swudb.com/' target='_blank'>SWUDB</a></u> or <u><a style='color:lightblue;' href='https://sw-unlimited-db.com/' target='_blank'>SW-Unlimited-DB</a></u> Deck Link <span class="secondary">(use the url or 'Deck Link' button)</span></label>
   <input type="text" id="fabdb" name="fabdb" value='<?= $deckUrl ?>'>
   <?php
   if (isset($_SESSION["userid"])) {
@@ -153,11 +153,33 @@ include_once 'Header.php';
     <h2>News</h2>
     <div style="position: relative;">
       <div style='vertical-align:middle; text-align:center;'>
+        <img src="./Images/unimpl.png" alt="TWI" style="max-width: 100%; border-radius: 5px;">
+        <div style="text-align: left;">
+        <h3 style="margin: 15px 0; display: block;">List of Set 3 Unimplemented Cards</h3>
+        <p>Thanks to the efforts of OotTheMonk, Brubraz, and ninin, many remaining Set 3 cards have now been implemented in Karabast.</p>
+        <p>Remaining cards:</p>
+        <ul class="karabast-unimplemented-list">
+          <li>Aid from the Innocent</li>
+          <li>Barriss Offee</li>
+          <li>Finn</li>
+          <li>Heroes on Both Sides</li>
+          <li>Lux Bonteri</li>
+          <li>On Top of Things</li>
+          <li>Planetery Invasion</li>
+          <li>Sly Moore</li>
+          <li>Sword and Shield Maneuver</li>
+          <li>Unnatural Life</li>
+          <li>Wartime Profiteering</li>
+        </ul>
+        <p style="margin-bottom: 2rem;";>Bugs are still a possibility during this rollout, if you discover any as you play please submit them to the <i>#bug-reports</i> channel in our <a target="_blank" href="https://discord.gg/hKRaqHND4v">Discord</a>.</p>
+      </div>
+    </div>
+    <div style="position: relative;">
+      <div style='vertical-align:middle; text-align:center;'>
         <img src="./Images/yoda.png" alt="SHD" style="max-width: 100%; border-radius: 5px;">
         <div style="text-align: left;">
         <h3 style="margin: 15px 0; display: block;">Set 3 launches, and Karabast's next steps </h3>
-        <p>Twilight is here! Thanks to the hard work of OotTheMonk the majority of Set 3 cards have now been added to Karabast. See <a href="https://github.com/SWU-Karabast/SWUOnline/tree/main/UnimplementedCards" target="_blank">Unimplemented Cards</a> for a list of those remaining.</p>
-        <p>Bugs are a possibility during this rollout, if you discover any as you play please submit them to the <i>#bug-reports</i> channel in our <a target="_blank" href="https://discord.gg/hKRaqHND4v">Discord</a>.</p>
+        <p>Twilight is here! Thanks to the hard work of OotTheMonk the majority of Set 3 cards have now been added to Karabast.</p>
         <p>The team is still hard at work on a brand new engine for Karabast that will dramatically simplify adding future sets, and card bug fixes. <a target="_blank" href="https://discord.gg/hKRaqHND4v">Join our Discord</a> for the latest progress updates and timeline. If you have coding experience we're always open to new contributors, info on how to help out can also be found on Discord.</p>
       </div>
     </div>
