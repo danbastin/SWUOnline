@@ -5,6 +5,7 @@ ob_start();
 include "HostFiles/Redirector.php";
 include "Libraries/HTTPLibraries.php";
 include "Libraries/SHMOPLibraries.php";
+include_once "WriteLog.php";
 include_once "Libraries/PlayerSettings.php";
 include_once 'Assets/patreon-php-master/src/PatreonDictionary.php';
 ob_end_clean();
@@ -51,13 +52,11 @@ $gameFileHandler = fopen($filename, "w");
 include "MenuFiles/WriteGamefile.php";
 WriteGameFile();
 
-$filename = "./Games/" . $gameName . "/gamelog.txt";
-$handler = fopen($filename, "w");
-fclose($handler);
+CreateLog($gameName);
 
 $currentTime = round(microtime(true) * 1000);
 $isReplay = "1";
-WriteCache($gameName, 1 . "!" . $currentTime . "!" . $currentTime . "!0!-1!" . $currentTime . "!!!0!" . $isReplay . "!0!0!0!" . $gameStatus); //Initialize SHMOP cache for this game
+WriteCache($gameName, 1 . "!" . $currentTime . "!" . $currentTime . "!0!-1!" . $currentTime . "!!!0!" . $isReplay . "!0!0!0!" . $gameStatus. "!0!0!$currentTime!0!0"); //Initialize SHMOP cache for this game
 
 copy("./Replays/" . $userId . "/" . $replayNumber . "/origGamestate.txt", "./Games/" . $gameName . "/gamestate.txt");
 copy("./Replays/" . $userId . "/" . $replayNumber . "/replayCommands.txt", "./Games/" . $gameName . "/replayCommands.txt");

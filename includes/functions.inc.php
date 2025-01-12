@@ -285,7 +285,7 @@ function LogChallengeResult($conn, $gameResultID, $playerID, $result)
 	}
 }
 
-function SerializeGameResult($player, $DeckLink, $deckAfterSB, $gameID = "", $opposingHero = "", $gameName = "", $deckbuilderID = "")
+function SerializeGameResult($player, $DeckLink, $deckAfterSB, $gameID = "", $opposingHero = "", $gameName = "", $deckbuilderID = "", $opposingBaseColor = "")
 {
 	global $winner, $currentRound, $CardStats_TimesPlayed, $CardStats_TimesActivated, $CardStats_TimesResourced, $firstPlayer;
 	global $TurnStats_DamageThreatened, $TurnStats_DamageDealt, $TurnStats_CardsPlayedOffense, $TurnStats_CardsPlayedDefense, $TurnStats_CardsPitched, $TurnStats_CardsBlocked;
@@ -303,6 +303,7 @@ function SerializeGameResult($player, $DeckLink, $deckAfterSB, $gameID = "", $op
 	$deck["result"] = ($player == $winner ? 1 : 0);
 	$deck["firstPlayer"] = ($player == $firstPlayer ? 1 : 0);
 	if ($opposingHero != "") $deck["opposingHero"] = $opposingHero;
+	if ($opposingHero != "") $deck["opposingBaseColor"] = $opposingBaseColor;
 	if ($deckbuilderID != "") $deck["deckbuilderID"] = $deckbuilderID;
 	$deck["cardResults"] = [];
 	$deckAfterSB = explode(" ", $deckAfterSB);
@@ -317,6 +318,8 @@ function SerializeGameResult($player, $DeckLink, $deckAfterSB, $gameID = "", $op
 		$deck["cardResults"][$i]["played"] = 0;
 		$deck["cardResults"][$i]["blocked"] = 0;
 		$deck["cardResults"][$i]["pitched"] = 0;
+		$deck["cardResults"][$i]["resourced"] = 0;
+		$deck["cardResults"][$i]["activated"] = 0;
 		$deck["cardResults"][$i]["cardName"] = CardName($deduplicatedDeck[$i]);
 		//$deck["cardResults"][$i]["pitchValue"] = PitchValue($deduplicatedDeck[$i]);
 	}
@@ -326,7 +329,9 @@ function SerializeGameResult($player, $DeckLink, $deckAfterSB, $gameID = "", $op
 			if ($deck["cardResults"][$j]["cardId"] == GetNormalCardID($cardStats[$i])) {
 				$deck["cardResults"][$j]["played"] = $cardStats[$i + $CardStats_TimesPlayed];
 				$deck["cardResults"][$j]["blocked"] = $cardStats[$i + $CardStats_TimesActivated];
+				$deck["cardResults"][$j]["activated"] = $cardStats[$i + $CardStats_TimesActivated];
 				$deck["cardResults"][$j]["pitched"] = $cardStats[$i + $CardStats_TimesResourced];
+				$deck["cardResults"][$j]["resourced"] = $cardStats[$i + $CardStats_TimesResourced];
 				break;
 			}
 		}

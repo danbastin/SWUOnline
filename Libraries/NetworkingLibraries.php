@@ -376,9 +376,14 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
         $cardID = $discard[$found];
         $modifier = $discard[$found+1];
         if(!IsPlayable($cardID, $turn[0], "GY", $found)) break;
-        if($modifier == "TTFREE") AddCurrentTurnEffect("TTFREE", $playerID);
+        if(str_starts_with($modifier, "TT") && strlen($modifier) > 2) AddCurrentTurnEffect($modifier, $playerID);
         RemoveDiscard($playerID, $found);
         PlayCard($cardID, "GY");
+      }
+      break;
+    case 36: //CHOOSEOPTION
+      if ($turn[0] == "CHOOSEOPTION" || $turn[0] == "MAYCHOOSEOPTION") {
+        ContinueDecisionQueue($buttonInput);
       }
       break;
     case 99: //Pass
@@ -447,6 +452,7 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
       PlayCard($cardID, "PLAY", -1, $index, $theirAllies[$index + 5]);
       break;
     case 10000: //Undo
+      if(GetCachePiece($gameName, 14) == 7) break;//$MGS_StatsLoggedIrreversible
       RevertGamestate();
       $skipWriteGamestate = true;
       WriteLog("Player " . $playerID . " undid their last action.");
@@ -567,7 +573,7 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
       mkdir($folderName, 0700, true);
       copy("./Games/$gameName/gamestate.txt", $folderName . "/gamestate.txt");
       copy("./Games/$gameName/gamestateBackup.txt", $folderName . "/gamestateBackup.txt");
-      copy("./Games/$gameName/gamelog.txt", $folderName . "/gamelog.txt");
+      copy(LogPath($gameName), $folderName . "/gamelog.txt");
       copy("./Games/$gameName/beginTurnGamestate.txt", $folderName . "/beginTurnGamestate.txt");
       copy("./Games/$gameName/lastTurnGamestate.txt", $folderName . "/lastTurnGamestate.txt");
       WriteLog("Thank you for reporting a bug. To describe what happened, please report it on the discord server with the game number for reference (" . $gameName . "-" . $bugCount . ").");
@@ -590,7 +596,10 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
       if($isSimulation) return;
       include_once "./includes/dbh.inc.php";
       include_once "./includes/functions.inc.php";
-      if(!IsGameOver()) PlayerWon(($playerID == 1 ? 1 : 2));
+      if(!IsGameOver()) {
+        PlayerWon(($playerID == 1 ? 1 : 2));
+        SetCachePiece($gameName, 14, 7);//$MGS_StatsLoggedIrreversible
+      }
       break;
     case 100010: //Grant badge
       if($isSimulation) return;
@@ -650,7 +659,7 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
       mkdir($folderName, 0700, true);
       copy("./Games/$gameName/gamestate.txt", $folderName . "/gamestate.txt");
       copy("./Games/$gameName/gamestateBackup.txt", $folderName . "/gamestateBackup.txt");
-      copy("./Games/$gameName/gamelog.txt", $folderName . "/gamelog.txt");
+      copy(LogPath($gameName), $folderName . "/gamelog.txt");
       copy("./Games/$gameName/beginTurnGamestate.txt", $folderName . "/beginTurnGamestate.txt");
       copy("./Games/$gameName/lastTurnGamestate.txt", $folderName . "/lastTurnGamestate.txt");
       WriteLog("Thank you for reporting the player. The chat log has been saved to the server. Please report it to mods on the discord server with the game number for reference ($gameName).");
@@ -737,7 +746,7 @@ function Passed(&$turn, $playerID)
 function PassInput($autopass = false)
 {
   global $turn, $currentPlayer, $initiativeTaken, $initiativePlayer;
-  if($turn[0] == "END" || $turn[0] == "MAYMULTICHOOSETEXT" || $turn[0] == "MAYCHOOSECOMBATCHAIN" || $turn[0] == "MAYCHOOSEMULTIZONE" || $turn[0] == "MAYMULTICHOOSEAURAS" || $turn[0] == "MAYMULTICHOOSEHAND" || $turn[0] == "MAYCHOOSEHAND" || $turn[0] == "MAYCHOOSEDISCARD" || $turn[0] == "MAYCHOOSEARSENAL" || $turn[0] == "MAYCHOOSEPERMANENT" || $turn[0] == "MAYCHOOSEDECK" || $turn[0] == "MAYCHOOSEMYSOUL" || $turn[0] == "MAYCHOOSETOP" || $turn[0] == "MAYCHOOSECARD" || $turn[0] == "INSTANT" || $turn[0] == "OK" || $turn[0] == "LOOKHAND" || $turn[0] == "BUTTONINPUT") {
+  if($turn[0] == "END" || $turn[0] == "MAYCHOOSEOPTION" || $turn[0] == "MAYMULTICHOOSETEXT" || $turn[0] == "MAYCHOOSECOMBATCHAIN" || $turn[0] == "MAYCHOOSEMULTIZONE" || $turn[0] == "MAYMULTICHOOSEAURAS" || $turn[0] == "MAYMULTICHOOSEHAND" || $turn[0] == "MAYCHOOSEHAND" || $turn[0] == "MAYCHOOSEDISCARD" || $turn[0] == "MAYCHOOSEARSENAL" || $turn[0] == "MAYCHOOSEPERMANENT" || $turn[0] == "MAYCHOOSEDECK" || $turn[0] == "MAYCHOOSEMYSOUL" || $turn[0] == "MAYCHOOSETOP" || $turn[0] == "MAYCHOOSECARD" || $turn[0] == "INSTANT" || $turn[0] == "OK" || $turn[0] == "LOOKHAND" || $turn[0] == "BUTTONINPUT") {
     ContinueDecisionQueue("PASS");
   } else {
     if($autopass == true);
@@ -1402,12 +1411,15 @@ function PlayCard($cardID, $from, $dynCostResolved = -1, $index = -1, $uniqueID 
   }
   $resourceCards = &GetResourceCards($currentPlayer);
   $resourcesPaid = 0;
-  for($i = 0; $i < count($resourceCards); $i += ResourcePieces()) {
-    if($resources[1] == 0) break;
-    if($resourceCards[$i+4] == "0") {
-      $resourceCards[$i+4] = "1";
-      --$resources[1];
-      ++$resourcesPaid;
+  for($j = 0; $j <= 1; $j++) {
+    for($i = 0; $i < count($resourceCards); $i += ResourcePieces()) {
+      if($resources[1] == 0) break;
+      if($j == 0 && $resourceCards[$i+6] == "-1") continue; // Prioritize stolen resources
+      if($resourceCards[$i+4] == "0") {
+        $resourceCards[$i+4] = "1";
+        --$resources[1];
+        ++$resourcesPaid;
+      }
     }
   }
   if($resources[1] > 0) {
@@ -1714,34 +1726,6 @@ function PayAdditionalCosts($cardID, $from)
     }
     SetClassState($currentPlayer, $CS_AdditionalCosts, $discarded);
   }
-  switch($cardID) {
-    case "8615772965"://Vigilance
-      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose 2 modes");
-      AddDecisionQueue("MULTICHOOSETEXT", $currentPlayer, "2-Mill,Heal,Defeat,Shield-2");
-      AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts, 1);
-      AddDecisionQueue("SHOWMODES", $currentPlayer, $cardID, 1);
-      break;
-    case "0073206444"://Command
-      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose 2 modes");
-      AddDecisionQueue("MULTICHOOSETEXT", $currentPlayer, "2-Experience,Deal Damage,Resource,Return Unit-2");
-      AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts, 1);
-      AddDecisionQueue("SHOWMODES", $currentPlayer, $cardID, 1);
-      break;
-    case "3736081333"://Aggression
-      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose 2 modes");
-      AddDecisionQueue("MULTICHOOSETEXT", $currentPlayer, "2-Draw,Defeat Upgrades,Ready Unit,Deal Damage-2");
-      AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts, 1);
-      AddDecisionQueue("SHOWMODES", $currentPlayer, $cardID, 1);
-      break;
-    case "3789633661"://Cunning
-      AddDecisionQueue("SETDQCONTEXT", $currentPlayer, "Choose 2 modes");
-      AddDecisionQueue("MULTICHOOSETEXT", $currentPlayer, "2-Return Unit,Buff Unit,Exhaust Units,Discard Random-2");
-      AddDecisionQueue("SETCLASSSTATE", $currentPlayer, $CS_AdditionalCosts, 1);
-      AddDecisionQueue("SHOWMODES", $currentPlayer, $cardID, 1);
-      break;
-    default:
-      break;
-  }
 }
 
 function MaterializeCardEffect($cardID)
@@ -1943,7 +1927,7 @@ function PlayCardEffect($cardID, $from, $resourcesPaid, $target = "-", $addition
           AddLayer($layerName, $currentPlayer, $cardID, $from . "!" . $resourcesPaid . "!" . $target . "!" . $additionalCosts . "!" . $abilityIndex . "!" . $playIndex, "-", $uniqueID, append:true);
         }
         else if($from != "PLAY" && $from != "EQUIP") {
-          AddAllyPlayAbilityLayers($cardID, $from, $uniqueID);
+          AddAllyPlayAbilityLayers($cardID, $from, $uniqueID, $resourcesPaid);
         }
       }
     }

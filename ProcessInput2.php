@@ -3,7 +3,6 @@
 error_reporting(E_ALL);
 ob_start();
 
-include "WriteLog.php";
 include "GameLogic.php";
 include "GameTerms.php";
 include "HostFiles/Redirector.php";
@@ -20,6 +19,7 @@ require_once("Libraries/CoreLibraries.php");
 include_once "./includes/dbh.inc.php";
 include_once "./includes/functions.inc.php";
 include_once "APIKeys/APIKeys.php";
+include_once "WriteLog.php";
 
 //We should always have a player ID as a URL parameter
 $gameName = TryGET("gameName", "");
@@ -95,7 +95,7 @@ if(!IsReplay()) {
   }
   if ($playerID != 3 && $authKey != $targetAuth) { echo("Invalid auth key"); exit; }
   if ($playerID == 3 && !IsModeAllowedForSpectators($mode)) ExitProcessInput();
-  if(GetCachePiece($gameName, $playerID + 14) > 0) {
+  if(GetCachePiece($gameName, $playerID + 14) > 0 && GetCachePiece($gameName, 19) != $playerID) {
     exit("refresh");
   }
   if (!IsModeAsync($mode) && $currentPlayer != $playerID) {
@@ -119,6 +119,9 @@ if ((IsPatron(1) || IsPatron(2)) && !IsReplay()) {
 
 if($initiativeTaken > 2 && $mode != 99 && $mode != 34 && !IsModeAsync($mode)) $initiativeTaken = 0;
 
+if(GetCachePiece($gameName, 14) === 7 && $mode != 100001) {
+  return;
+}
 //Now we can process the command
 ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkInput, false, $inputText);
 
@@ -172,6 +175,14 @@ if (!$skipWriteGamestate) {
     $currentPlayerActivity = 0;
   }
   DoGamestateUpdate();
+  $currentTime = round(microtime(true) * 1000);
+  SetCachePiece($gameName, 17, $currentTime);
+  if(GetCachePiece($gameName, 18) == $playerID) {
+    SetCachePiece($gameName, 18, "0");
+    if (GetCachePiece($gameName, 19) == $playerID) {
+      SetCachePiece($gameName, 19, "0");
+    }
+  }
   include "WriteGamestate.php";
 }
 

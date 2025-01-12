@@ -14,6 +14,7 @@ class Ally {
     $mzArr = explode("-", $MZIndexOrUniqueID);
 
     if ($mzArr[0] != "MYALLY" && $mzArr[0] != "THEIRALLY") {
+      $mzArr = ["MYALLY", ""]; // Default non-existent ally
       $players = ($player == 1 || $player == 2) ? [$player] : [1, 2];
       foreach ($players as $p) {
         $index = SearchAlliesForUniqueID($MZIndexOrUniqueID, $p);
@@ -100,6 +101,7 @@ class Ally {
     } else {
       $this->allies[$this->index+2] -= $amount;
     }
+    $this->allies[$this->index+14] = 1;//Track that the ally was healed this round
     AddEvent("RESTORE", $this->UniqueID() . "!" . $healed);
     return $healed;
   }
@@ -163,9 +165,13 @@ class Ally {
     return $this->allies[$this->index+1] == 1;
   }
 
-  function Destroy() {
+  function WasHealed() {
+    return $this->allies[$this->index+14] == 1;
+  }
+
+  function Destroy($enemyEffects = true) {
     if($this->index == -1) return "";
-    if($this->AvoidsDestroyByEnemyEffects()) {
+    if($enemyEffects && $this->AvoidsDestroyByEnemyEffects()) {
       WriteLog(CardLink($this->CardID(), $this->CardID()) . " cannot be defeated by enemy card effects.");
       return "";
     }
@@ -174,12 +180,14 @@ class Ally {
 
   //Returns true if the ally is destroyed
   function DealDamage($amount, $bypassShield = false, $fromCombat = false, &$damageDealt = NULL, $enemyDamage = false, $fromUnitEffect=false) {
+    global $currentTurnEffects;
     if($this->index == -1 || $amount <= 0) return false;
     global $mainPlayer;
     if(!$fromCombat && $this->AvoidsDamage($enemyDamage)) return;
     if($fromCombat && !$this->LostAbilities()) {
       if($this->CardID() == "6190335038" && $this->PlayerID() == $mainPlayer && IsCoordinateActive($this->PlayerID())) return false;//Aayla Secura
     }
+    //Upgrade damage prevention
     $subcards = $this->GetSubcards();
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
       if($subcards[$i] == "8752877738") {
@@ -194,6 +202,18 @@ class Ally {
       switch($subcards[$i]) {
         case "5738033724"://Boba Fett's Armor
           if(CardTitle($this->CardID()) == "Boba Fett") $amount -= 2;
+          if($amount < 0) $amount = 0;
+          break;
+        default: break;
+      }
+    }
+    //Current effect damage prevention
+    for($i=0; $i<count($currentTurnEffects); $i+=CurrentTurnEffectPieces()) {
+      if($currentTurnEffects[$i+1] != $this->PlayerID()) continue;
+      if($currentTurnEffects[$i+2] != -1 && $currentTurnEffects[$i+2] != $this->UniqueID()) continue;
+      switch($currentTurnEffects[$i]) {
+        case "7244268162"://Finn
+          $amount -= 1;
           if($amount < 0) $amount = 0;
           break;
         default: break;
@@ -315,6 +335,9 @@ class Ally {
         case "9017877021"://Clone Commander Cody
           if($i != $this->index && IsCoordinateActive($this->playerID)) $power += 1;
           break;
+        case "7924172103"://Bariss Offee
+          if($this->WasHealed()) $power += 1;
+          break;
         default: break;
       }
     }
@@ -323,7 +346,7 @@ class Ally {
     for($i=0; $i<count($theirAllies); $i+=AllyPieces()) {
       switch($theirAllies[$i]) {
         case "3731235174"://Supreme Leader Snoke
-          if(!IsLeader($this->CardID(), $this->playerID)) {
+          if (!$this->IsLeader()) {
             $power -= 2;
           }
           break;
@@ -548,11 +571,15 @@ class Ally {
         default: break;
       }
     }
-    if(IsLeader($this->CardID() && LeaderAbilitiesIgnored())) {
+    if ($this->IsLeader() && LeaderAbilitiesIgnored()) {
       return true;
     }
 
     return false;
+  }
+
+  function IsLeader() {
+    return IsLeader($this->CardID());
   }
 
   function IsUpgraded(): bool {

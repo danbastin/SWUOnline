@@ -1,18 +1,28 @@
 <?php
 
 include 'Libraries/HTTPLibraries.php';
+include 'Libraries/NetworkingLibraries.php';
 
-$returnDelim = "GSDELIM";
+$stage = getenv('STAGE') ?: 'prod';
+$isDev = $stage === 'dev';
+
+$ReturnDelim = "GSDELIM";
+$DisconnectFirstWarningMS = $isDev ? 1e9 : 30e3;
+$DisconnectFinalWarningMS = $isDev ? 1e9 : 55e3;
+$DisconnectTimeoutMS = $isDev ? 1e9 : 60e3;
+$ServerTimeoutMS = $isDev ? 1e9 : 90e3;
+$InputWarningMS = $isDev ? 1e9 : 60e3;
+$InputTimeoutMS = $isDev ? 1e9 : 90e3;
 
 //We should always have a player ID as a URL parameter
 $gameName = $_GET["gameName"];
 if (!IsGameNameValid($gameName)) {
-  echo ("NaN" . $returnDelim);
+  echo ("NaN" . $ReturnDelim);
   exit;
 }
 $playerID = TryGet("playerID", 3);
 if (!is_numeric($playerID)) {
-  echo ("NaN" . $returnDelim);
+  echo ("NaN" . $ReturnDelim);
   exit;
 }
 
@@ -33,7 +43,7 @@ if (($playerID == 1 || $playerID == 2) && $authKey == "") {
 
 include "HostFiles/Redirector.php";
 include "Libraries/SHMOPLibraries.php";
-include "WriteLog.php";
+include_once "WriteLog.php";
 
 SetHeaders();
 
@@ -46,6 +56,7 @@ if($playerID == 3 && GetCachePiece($gameName, 9) != "1") {
 $isGamePlayer = $playerID == 1 || $playerID == 2;
 $opponentDisconnected = false;
 $opponentInactive = false;
+$currentPlayerInputTimeout = false;
 
 $currentTime = round(microtime(true) * 1000);
 if ($isGamePlayer) {
@@ -57,16 +68,18 @@ if ($isGamePlayer) {
   SetCachePiece($gameName, $playerID + 1, $currentTime);
   SetCachePiece($gameName, $playerID + 3, "0");
   if ($playerStatus > 0 || GetCachePiece($gameName, $playerID + 14) > 0) {
-    WriteLog("Player $playerID has reconnected.");
-    SetCachePiece($gameName, $playerID + 3, "0");
-    SetCachePiece($gameName, $playerID + 14, 0);
-    GamestateUpdated($gameName);
+    if(GetCachePiece($gameName, 19) != $playerID) {
+      WriteLog("Player $playerID has reconnected.");
+      SetCachePiece($gameName, $playerID + 3, "0");
+      SetCachePiece($gameName, $playerID + 14, 0);
+      GamestateUpdated($gameName);
+    }
   }
 }
 $count = 0;
 $cacheVal = intval(GetCachePiece($gameName, 1));
 while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
-  usleep(100000); //100 milliseconds
+  usleep(100_000); //100 milliseconds
   $currentTime = round(microtime(true) * 1000);
   $readCache = ReadCache($gameName);
   if($readCache == "") break;
@@ -79,30 +92,63 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     $oppStatus = $cacheArr[$otherP + 2];
     $timeDiff = $currentTime - $oppLastTime;
     $otherPlayerDisconnectStatus = GetCachePiece($gameName, $otherP + 14);
-    if ($timeDiff > 30_000 && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
-      WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>Player $otherP, are you still there? Your opponent will be allowed to claim victory in 30 seconds if no activity is detected.");
-      GamestateUpdated($gameName);
-      IncrementCachePiece($gameName, $otherP + 14);
-    }
-    if ($timeDiff > 55_000 && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
-      WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>5 seconds left, Player $otherP...");
-      IncrementCachePiece($gameName, $otherP + 14);
-      GamestateUpdated($gameName);
-    }
-    if ($timeDiff > 60_000 && $otherPlayerDisconnectStatus == 2 && ($oppStatus == "0")) {
-      WriteLog("Opponent has disconnected.");
+    $lastActionTime = intval($cacheArr[16]);
+    $lastActionWarning = intval($cacheArr[17]);
+    $finalWarning = intval($cacheArr[18]);
+    if (GetCachePiece($gameName, 14) == 6 && $timeDiff > 10_000 && $oppStatus == "0") {
+      WriteLog("Player $otherP has disconnected.");
       $opponentDisconnected = true;
       SetCachePiece($gameName, $otherP + 3, "2");
-      IncrementCachePiece($gameName, $otherP + 14);
+      SetCachePiece($gameName, 14, 7);//$MGS_StatsLoggedIrreversible
       GamestateUpdated($gameName);
-    }
-    //Handle server timeout
-    $lastUpdateTime = $cacheArr[5];
-    if ($currentTime - $lastUpdateTime > 90000 && $cacheArr[11] != "1")//90 seconds
-    {
-      SetCachePiece($gameName, 12, "1");
-      $opponentInactive = true;
-      $lastUpdate = 0;
+    } else {
+      if ($timeDiff > $DisconnectFirstWarningMS && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
+        $warningSeconds = ($DisconnectTimeoutMS - $DisconnectFirstWarningMS) / 1000;
+        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>Player $otherP, are you still there? Your opponent will be allowed to claim victory in $warningSeconds seconds if no activity is detected.");
+        IncrementCachePiece($gameName, $otherP + 14);
+        GamestateUpdated($gameName);
+      }
+      if ($timeDiff > $DisconnectFinalWarningMS && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
+        $finalWarningSeconds = ($DisconnectTimeoutMS - $DisconnectFinalWarningMS) / 1000;
+        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>$finalWarningSeconds seconds left, Player $otherP...");
+        IncrementCachePiece($gameName, $otherP + 14);
+        GamestateUpdated($gameName);
+      }
+      if ($timeDiff > $DisconnectTimeoutMS && $otherPlayerDisconnectStatus == 2 && ($oppStatus == "0")) {
+        WriteLog("Player $otherP has disconnected.");
+        $opponentDisconnected = true;
+        SetCachePiece($gameName, $otherP + 3, "2");
+        IncrementCachePiece($gameName, $otherP + 14);
+        GamestateUpdated($gameName);
+      }
+      //Handle server timeout
+      $lastUpdateTime = intval($cacheArr[5]);
+      if ($currentTime - $lastUpdateTime > $ServerTimeoutMS && $cacheArr[11] != "1")//90 seconds
+      {
+        SetCachePiece($gameName, 12, "1");
+        $opponentInactive = true;
+        $lastUpdate = 0;
+      }
+
+      if ($lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputWarningMS && $lastActionWarning === 0 && $finalWarning == 0) {
+        $inputWarningSeconds = $InputWarningMS / 1000;
+        $inputWarningSecondsLeft = ($InputTimeoutMS - $InputWarningMS) / 1000;
+        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>No input in over $inputWarningSeconds seconds; Player $playerID has $inputWarningSecondsLeft more seconds to take an action or the turn will be passed");
+        SetCachePiece($gameName, 18, $playerID);
+        GamestateUpdated($gameName);
+      }
+
+      if ($lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning > 0) {
+        $currentPlayerInputTimeout = true;
+        $lastUpdate = 0;
+      } else if ($lastCurrentPlayer == $otherP && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning == $otherP && $finalWarning == $otherP) {
+        WriteLog("Player $otherP has disconnected.");
+        $opponentDisconnected = true;
+        SetCachePiece($gameName, $otherP + 3, "2");
+        SetCachePiece($gameName, $otherP + 14, 3);
+        SetCachePiece($gameName, 18, 0);
+        GamestateUpdated($gameName);
+      }
     }
   }
   ++$count;
@@ -158,12 +204,12 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   $targetAuth = ($playerID == 1 ? $p1Key : $p2Key);
   if ($playerID != 3 && $authKey != $targetAuth) {
-    echo ("999999" . $returnDelim);
+    echo ("999999" . $ReturnDelim);
     exit;
   }
 
-  echo($cacheVal . $returnDelim);
-  echo(implode("~", $events) . $returnDelim);
+  echo($cacheVal . $ReturnDelim);
+  echo(implode("~", $events) . $ReturnDelim);
 
   if ($currentPlayer == $playerID) {
     $icon = "ready.png";
@@ -177,6 +223,20 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     RevertGamestate();
     GamestateUpdated($gameName);
     exit();
+  }
+
+  if($lastCurrentPlayer == $playerID && $currentPlayerInputTimeout && !$opponentInactive) {
+    if(GetCachePiece($gameName, 18) == $playerID && GetCachePiece($gameName, 19) != $playerID) {
+      SetCachePiece($gameName, 17, $currentTime);
+      SetCachePiece($gameName, 19, $playerID);
+      PassInput();
+      CacheCombatResult();
+      DoGamestateUpdate();
+      include "WriteGamestate.php";
+      GamestateUpdated($gameName);
+      ExitProcessInput();
+      exit();
+    }
   }
 
   echo ("<div id='iconHolder'>" . $icon . "</div>");
@@ -245,10 +305,11 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     $top = 15;
   }
 
+  $initiativeSuffix = $initiativeTaken ? "-taken" : "";
   if($initiativePlayer == $playerID || ($playerID == 3 && $initiativePlayer == 2)) {
-    echo ("<div class='my-initiative'><span>Initiative</span>");
+    echo ("<div class='my-initiative$initiativeSuffix'><span>Initiative</span>");
   } else {
-    echo ("<div class='their-initiative'><span>Initiative</span>");
+    echo ("<div class='their-initiative$initiativeSuffix'><span>Initiative</span>");
   }
   echo ("</div>");
 
@@ -269,7 +330,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       if (CanPassPhase($turn[0])) {
         if ($turn[0] == "B") echo (CreateButton($playerID, "Undo Block", 10001, 0, "18px") . " " . CreateButton($playerID, "Pass", 99, 0, "18px") . " " . CreateButton($playerID, "Pass Block and Reactions", 101, 0, "16px", "", "Reactions will not be skipped if the opponent reacts"));
       }
-      if ($opponentDisconnected == true && $playerID != 3) {
+      if ($opponentDisconnected && $playerID != 3) {
         echo (CreateButton($playerID, "Claim Victory", 100007, 0, "18px", "", "claimVictoryButton"));
       }
     } else {
@@ -635,6 +696,9 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         $playerBorderColor = ($layers[$index + 1] == $playerID ? 1 : 2);
       }
 
+      // Overwrite the $playerBorderColor for MYRESOURCES to highlight stolen cards
+      if ($option[0] == "MYRESOURCES" && $myArsenal[$index + 6] != "-1") $playerBorderColor = 2;
+
       if ($option[0] == "THEIRARS" && $theirArsenal[$index + 1] == "DOWN") $card = $TheirCardBack;
 
       $overlay = 0;
@@ -696,6 +760,89 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     ChoosePopup($theirCharacter, $turn[2], 16, "Choose a card from your opponent character/equipment", CharacterPieces());
   }
 
+  if (($turn[0] == "CHOOSEOPTION" || $turn[0] == "MAYCHOOSEOPTION") && $currentPlayer == $playerID) {
+    $caption = "<div>Choose " . TypeToPlay($turn[0]) .  "</div>";
+    if (GetDQHelpText() != "-") $caption = "<div>" . implode(" ", explode("_", GetDQHelpText())) . "</div>";
+    $params = explode("&", $turn[2]);
+    $cardID = $params[0];
+    $options = explode(";", $params[1]);
+    $hiddenOptions = isset($params[2]) && $params[2] != "" ? explode(",", $params[2]) : [];
+    $content = "<style>
+      .card-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 75%;
+        gap: 16px;
+        margin-left: -5px;
+        margin-top: 3%;
+      }
+      .card {
+        display: flex;
+        justify-content: center;
+        position: relative;
+        height: 100%;
+        aspect-ratio: 0.71;
+        overflow: hidden;
+        cursor: pointer;
+        border-radius: 0.375rem;
+        border: 2px solid #00FF66;
+        transition: background 0.3s ease;
+      }
+      .card.hidden {
+        display: none;
+      }
+      .card img {
+        height: 270%;
+        width: 270%;
+        position: absolute;
+        left: 50%;
+      }
+      .card.event img {
+        bottom: 0;
+        transform: translate(-50%, 10%);
+      }
+      .card.non-event img {
+        top: 0;
+        transform: translate(-50%, -15%);
+      }
+      .card-content {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+        color: white;
+        text-align: center;
+        font-size: 16px;
+        font-weight: 500;
+        padding: 8px;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.3) 70%);
+        transition: background 0.3s ease;
+      }
+      .card:hover .card-content {
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.5) 70%);
+      }
+    </style>";
+    
+    $content .= "<div class='card-container'>";
+    for ($i = 0; $i < count($options); ++$i) {
+      $submitLink = ProcessInputLink($playerID, 36, $i, "onclick");
+      $cardTypeClass = DefinedTypesContains($cardID, "Event") ? "event" : "non-event";
+      $content .= "<div class='card $cardTypeClass" . (in_array($i, $hiddenOptions) ? " hidden" : "") . "' $submitLink>";
+      $content .= "<img src='./WebpImages2/$cardID.webp' />";
+      $content .= "<div class='card-content'>";
+      $content .= str_replace("_", " ", $options[$i]);
+      $content .= "</div>";
+      $content .= "</div>";
+    }
+    $content .= "</div>";
+    echo CreatePopup("CHOOSEOPTION", [], 0, 1, $caption, 1, $content, height:"35%", width:"50%");
+  }
+
+  // MULTICHOOSETEXT and MAYMULTICHOOSETEXT are deprecated, use MULTICHOOSE and MAYMULTICHOOSE instead
   if (($turn[0] == "MULTICHOOSETHEIRDISCARD" || $turn[0] == "MULTICHOOSEDISCARD" || $turn[0] == "MULTICHOOSEHAND" || $turn[0] == "MAYMULTICHOOSEHAND" || $turn[0] == "MULTICHOOSEUNIT" || $turn[0] == "MULTICHOOSETHEIRUNIT" || $turn[0] == "MULTICHOOSEDECK" || $turn[0] == "MULTICHOOSETEXT" || $turn[0] == "MAYMULTICHOOSETEXT" || $turn[0] == "MULTICHOOSETHEIRDECK" || $turn[0] == "MAYMULTICHOOSEAURAS") && $currentPlayer == $playerID) {
     $content = "";
     $multiAllies = &GetAllies($playerID);
@@ -1131,7 +1278,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
   echo ("</div>");
 
   echo ("<div id='gamelog'>");
-  EchoLog($gameName, $playerID);
+  EchoLog($gameName);
   echo ("</div>");
   if ($playerID != 3) {
     echo ("<div id='chatPlaceholder'></div>");
