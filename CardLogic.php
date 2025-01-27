@@ -29,7 +29,7 @@ function PummelHit($player = -1, $passable = false, $fromDQ = false, $context=""
   }
 }
 
-function DefeatUpgrade($player, $may = false, $search="MYALLY&THEIRALLY", $upgradeFilter="", $to="DISCARD", $passable=false) {
+function DefeatUpgrade($player, $may = false, $search="MYALLY:hasUpgradeOnly=true&THEIRALLY:hasUpgradeOnly=true", $upgradeFilter="", $to="DISCARD", $passable=false) {
   $verb = "";
   switch($to) {
     case "DISCARD": $verb = "defeat"; break;
@@ -439,7 +439,7 @@ function ContinueDecisionQueue($lastResult = "")
         if($cardID == "ENDTURN") EndStep();
         else if($cardID == "ENDSTEP") FinishTurnPass();
         else if($cardID == "RESUMETURN") $turn[0] = "M";
-        else if($cardID == "LAYER") ProcessLayer($player, $parameter);
+        // else if($cardID == "LAYER") ProcessLayer($player, $parameter);
         else if($cardID == "FINALIZECHAINLINK") FinalizeChainLink($parameter);
         else if($cardID == "DEFENDSTEP") { $turn[0] = "A"; $currentPlayer = $mainPlayer; }
         else if(IsAbilityLayer($cardID)) {
@@ -539,8 +539,8 @@ function ContinueDecisionQueue($lastResult = "")
   if(count($dqVars) > 0) {
     if(str_contains($parameter, "{0}")) $parameter = str_replace("{0}", $dqVars[0], $parameter);
     if(str_contains($parameter, "<0>")) $parameter = str_replace("<0>", CardLink($dqVars[0], $dqVars[0]), $parameter);
-    if(str_contains($parameter, "{1}")) $parameter = str_replace("{1}", $dqVars[1], $parameter);
-    if(str_contains($parameter, "{2}")) $parameter = str_replace("{2}", $dqVars[2], $parameter);
+    if(str_contains($parameter, "{1}") && isset($dqVars[1])) $parameter = str_replace("{1}", $dqVars[1], $parameter);
+    if(str_contains($parameter, "{2}") && isset($dqVars[2])) $parameter = str_replace("{2}", $dqVars[2], $parameter);
   }
   if(count($dqVars) > 1) $parameter = str_replace("<1>", CardLink($dqVars[1], $dqVars[1]), $parameter);
   $parameter = str_replace(" ", "_", $parameter);//CardLink()s contain spaces, which can break things if this $parameter makes it to WriteGamestate.php(such as if $phase is YESNO). But CardLink() is also used in some cases where the underscores would show up directly, so I fix this here.
@@ -578,15 +578,16 @@ function ProcessAfterCombatLayer() {
   }
 }
 
-function ProcessLayer($player, $parameter)
-{
-  switch ($parameter) {
-    case "PHANTASM":
-      PhantasmLayer();
-      break;
-    default: break;
-  }
-}
+//FAB
+// function ProcessLayer($player, $parameter)
+// {
+//   switch ($parameter) {
+//     case "PHANTASM":
+//       PhantasmLayer();
+//       break;
+//     default: break;
+//   }
+// }
 
 function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $target="-")
 {
@@ -1112,6 +1113,36 @@ function IsExploitWhenPlayed($cardID) {
   }
 }
 
+function AsajjVentressIWorkAlone($player) {
+  AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY", 1);
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a friendly unit to damage", 1);
+  AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+  AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1", 1);
+  AddDecisionQueue("SETDQVAR", $player, "1", 1);
+  AddDecisionQueue("MZOP", $player, "GETARENA", 1);
+  AddDecisionQueue("SETDQVAR", $player, "2", 1);
+  AddDecisionQueue("MULTIZONEINDICES", $player, "THEIRALLY:arena={2}", 1);
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose an opposing unit to damage", 1);
+  AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+  AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1", 1);
+}
+
+function ShuttleST149($player) {
+  AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:hasUpgradeOnly=token&THEIRALLY:hasUpgradeOnly=token");
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to move a token upgrade from.", 1);
+  AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+  AddDecisionQueue("SETDQVAR", $player, "1", 1);
+  AddDecisionQueue("MZOP", $player, "GETUPGRADES", 1);
+  AddDecisionQueue("FILTER", $player, "LastResult-include-isToken-true", 1);
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a token upgrade to move.", 1);
+  AddDecisionQueue("CHOOSECARD", $player, "<-", 1);
+  AddDecisionQueue("SETDQVAR", $player, "0", 1);
+  AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY", 1);
+  AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to move <0> to.", 1);
+  AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+  AddDecisionQueue("MZOP", $player, "MOVEUPGRADE", 1);
+}
+
 function ObiWansAethersprite($player, $index) {
   AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:arena=Space&THEIRALLY:arena=Space", 1);
   AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to deal 2 damage to (or pass)", 1);
@@ -1120,3 +1151,38 @@ function ObiWansAethersprite($player, $index) {
   AddDecisionQueue("PASSPARAMETER", $player, "MYALLY-" . $index, 1);
   AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1", 1);
 }
+
+function UIDIsAffectedByMalevolence($uniqueID) {
+  global $currentTurnEffects;
+
+  $found = false;
+  for($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnPieces()) {
+    $found = $found || ($currentTurnEffects[$i] == "3381931079" && $currentTurnEffects[$i+2] == $uniqueID);
+  }
+
+  return $found;
+}
+
+function IndirectDamage($player, $amount)
+{
+  $sourcePlayer = $player == 1 ? 2 : 1;
+  $amount += SearchCount(SearchAlliesForCard($sourcePlayer, "4560739921"));
+  if(SearchCount(SearchAlliesForCard($sourcePlayer, "1330473789")) > 0) { //Devastator
+    for($i=0; $i<$amount; ++$i) {
+      AddDecisionQueue("MULTIZONEINDICES", $sourcePlayer, "THEIRALLY", $i == 0 ? 0 : 1);
+      AddDecisionQueue("PREPENDLASTRESULT", $sourcePlayer, "THEIRCHAR-0,", $i == 0 ? 0 : 1);
+      AddDecisionQueue("SETDQCONTEXT", $sourcePlayer, "Choose a card to deal an indirect damage (Remaining: " . ($amount-$i) . ")", $i == 0 ? 0 : 1);
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $sourcePlayer, "<-", 1);
+      AddDecisionQueue("MZOP", $sourcePlayer, "DEALDAMAGE,1,$sourcePlayer,0,0", 1);
+    }
+  } else {
+    for($i=0; $i<$amount; ++$i) {
+      AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY", $i == 0 ? 0 : 1);
+      AddDecisionQueue("PREPENDLASTRESULT", $player, "MYCHAR-0,", $i == 0 ? 0 : 1);
+      AddDecisionQueue("SETDQCONTEXT", $player, "Choose a card to deal an indirect damage (Remaining: " . ($amount-$i) . ")", $i == 0 ? 0 : 1);
+      AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+      AddDecisionQueue("MZOP", $player, "DEALDAMAGE,1,$player,0,0", 1);
+    }
+  }
+}
+

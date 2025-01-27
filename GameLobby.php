@@ -47,9 +47,6 @@ if (!isset($authKey) || $authKey != $targetAuth) {
   exit;
 }
 
-$yourName = ($playerID == 1 ? $p1uid : $p2uid);
-$theirName = ($playerID == 1 ? $p2uid : $p1uid);
-
 if ($gameStatus == $MGS_GameStarted) {
   $authKey = ($playerID == 1 ? $p1Key : $p2Key);
   if (isset($gameUIPath))
@@ -79,11 +76,14 @@ $isMobile = IsMobile();
   <title>Game Lobby</title>
   <link id="icon" rel="shortcut icon" type="image/png" href="./Images/<?= $icon ?>"/>
   <link rel="stylesheet" href="./css/chat.css">
-  <link rel="stylesheet" href="./css/karabast122924.css">
+  <link rel="stylesheet" href="./css/karabast011625.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Teko:wght@700&display=swap" rel="stylesheet">
+  <style>
+    <?php include 'PlayerColors.php' ?>
+  </style>
 </head>
 
 
@@ -134,7 +134,7 @@ $isMobile = IsMobile();
           <?php
           $contentCreator = ContentCreators::tryFrom(($playerID == 1 ? $p1ContentCreatorID : $p2ContentCreatorID));
           $nameColor = ($contentCreator != null ? $contentCreator->NameColor() : "");
-          $displayName = "<span style='color:" . $nameColor . "'>" . ($yourName != "-" ? $yourName : "Player " . $playerID) . "</span>";
+          $displayName = "<span style='color:$nameColor'>$playerName</span>";
           $deckFile = "./Games/" . $gameName . "/p" . $playerID . "Deck.txt";
           $handler = fopen($deckFile, "r");
 

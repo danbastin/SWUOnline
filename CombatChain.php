@@ -86,7 +86,8 @@ function AttackModifier($cardID, $player, $index)
   $char = &GetPlayerCharacter($player);
   switch($char[0]) {
     case "9652861741"://Petranaki Arena
-      $modifier += IsLeader($cardID) ? 1 : 0;
+      $ally = new Ally("MYALLY-" . $index, $player);
+      $modifier += $ally->IsLeader() ? 1 : 0;
       break;
     default: break;
   }
@@ -109,7 +110,7 @@ function AttackModifier($cardID, $player, $index)
       break;
     case "8def61a58e"://Kylo Ren
       $hand = &GetHand($player);
-      $modifier -= count($hand)/HandPieces();
+      $modifier -= LeaderAbilitiesIgnored() ? 0 : count($hand)/HandPieces();
       break;
     case "7486516061"://Concord Dawn Interceptors
       if($player == $defPlayer && GetAttackTarget() == "THEIRALLY-" . $index) $modifier += 2;
@@ -172,6 +173,13 @@ function AttackModifier($cardID, $player, $index)
       global $CS_NumAlliesDestroyed;
       $otherPlayer = $player == 1 ? 2 : 1;
       if(GetClassState($otherPlayer, $CS_NumAlliesDestroyed) > 0) $modifier += 1;
+      break;
+    case "8845408332"://Millennium Falcon (Get Out and Push)
+      $ally = new Ally("MYALLY-" . $index, $player);
+      $upgrades = $ally->GetUpgrades();
+      for($i = 0; $i < count($upgrades); ++$i) {
+        if(TraitContains($upgrades[$i], "Pilot", $player)) $modifier += 1;
+      }
       break;
     default: break;
   }
@@ -274,77 +282,78 @@ function ModifyBlockForType($type, $amount)
   return $count;
 }
 
-function OnBlockEffects($index, $from)
-{
-  global $currentTurnEffects, $combatChain, $currentPlayer, $combatChainState, $CCS_WeaponIndex, $mainPlayer;
-  $cardType = CardType($combatChain[$index]);
-  $otherPlayer = ($currentPlayer == 1 ? 2 : 1);
-  for($i = count($currentTurnEffects) - CurrentTurnPieces(); $i >= 0; $i -= CurrentTurnPieces()) {
-    $remove = false;
-    if($currentTurnEffects[$i + 1] == $currentPlayer) {
-      switch($currentTurnEffects[$i]) {
-        case "WTR092": case "WTR093": case "WTR094":
-          if(HasCombo($combatChain[$index])) {
-            $combatChain[$index + 6] += 2;
-          }
-          $remove = true;
-          break;
-        case "ELE004":
-          if($cardType == "DR") {
-            PlayAura("ELE111", $currentPlayer);
-          }
-          break;
-        case "DYN042": case "DYN043": case "DYN044":
-          if(ClassContains($combatChain[$index], "GUARDIAN", $currentPlayer) && CardSubType($combatChain[$index]) == "Off-Hand")
-          {
-            if($currentTurnEffects[$i] == "DYN042") $amount = 6;
-            else if($currentTurnEffects[$i] == "DYN043") $amount = 5;
-            else $amount = 4;
-            $combatChain[$index + 6] += $amount;
-            $remove = true;
-          }
-          break;
-        case "DYN115": case "DYN116":
-          if($cardType == "AA") $combatChain[$index + 6] -= 1;
-          break;
-        case "OUT005": case "OUT006":
-          if($cardType == "AR") $combatChain[$index + 6] -= 1;
-          break;
-        case "OUT007": case "OUT008":
-          if($cardType == "A") $combatChain[$index + 6] -= 1;
-          break;
-        case "OUT009": case "OUT010":
-          if($cardType == "E") $combatChain[$index + 6] -= 1;
-          break;
-        default:
-          break;
-      }
-    } else if($currentTurnEffects[$i + 1] == $otherPlayer) {
-      switch($currentTurnEffects[$i]) {
-        case "MON113": case "MON114": case "MON115":
-          if($cardType == "AA" && NumAttacksBlocking() == 1) {
-              AddCharacterEffect($otherPlayer, $combatChainState[$CCS_WeaponIndex], $currentTurnEffects[$i]);
-              WriteLog(CardLink($currentTurnEffects[$i], $currentTurnEffects[$i]) . " gives your weapon +1 for the rest of the turn.");
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    if($remove) RemoveCurrentTurnEffect($i);
-  }
-  $currentTurnEffects = array_values($currentTurnEffects);
-  switch($combatChain[0]) {
-    case "CRU079": case "CRU080":
-      if($cardType == "AA" && NumAttacksBlocking() == 1) {
-        AddCharacterEffect($otherPlayer, $combatChainState[$CCS_WeaponIndex], $combatChain[0]);
-        WriteLog(CardLink($combatChain[0], $combatChain[0]) . " got +1 for the rest of the turn.");
-      }
-      break;
-    default:
-      break;
-  }
-}
+//FAB
+// function OnBlockEffects($index, $from)
+// {
+//   global $currentTurnEffects, $combatChain, $currentPlayer, $combatChainState, $CCS_WeaponIndex, $mainPlayer;
+//   $cardType = CardType($combatChain[$index]);
+//   $otherPlayer = ($currentPlayer == 1 ? 2 : 1);
+//   for($i = count($currentTurnEffects) - CurrentTurnPieces(); $i >= 0; $i -= CurrentTurnPieces()) {
+//     $remove = false;
+//     if($currentTurnEffects[$i + 1] == $currentPlayer) {
+//       switch($currentTurnEffects[$i]) {
+//         case "WTR092": case "WTR093": case "WTR094":
+//           if(HasCombo($combatChain[$index])) {
+//             $combatChain[$index + 6] += 2;
+//           }
+//           $remove = true;
+//           break;
+//         case "ELE004":
+//           if($cardType == "DR") {
+//             PlayAura("ELE111", $currentPlayer);
+//           }
+//           break;
+//         case "DYN042": case "DYN043": case "DYN044":
+//           if(ClassContains($combatChain[$index], "GUARDIAN", $currentPlayer) && CardSubType($combatChain[$index]) == "Off-Hand")
+//           {
+//             if($currentTurnEffects[$i] == "DYN042") $amount = 6;
+//             else if($currentTurnEffects[$i] == "DYN043") $amount = 5;
+//             else $amount = 4;
+//             $combatChain[$index + 6] += $amount;
+//             $remove = true;
+//           }
+//           break;
+//         case "DYN115": case "DYN116":
+//           if($cardType == "AA") $combatChain[$index + 6] -= 1;
+//           break;
+//         case "OUT005": case "OUT006":
+//           if($cardType == "AR") $combatChain[$index + 6] -= 1;
+//           break;
+//         case "OUT007": case "OUT008":
+//           if($cardType == "A") $combatChain[$index + 6] -= 1;
+//           break;
+//         case "OUT009": case "OUT010":
+//           if($cardType == "E") $combatChain[$index + 6] -= 1;
+//           break;
+//         default:
+//           break;
+//       }
+//     } else if($currentTurnEffects[$i + 1] == $otherPlayer) {
+//       switch($currentTurnEffects[$i]) {
+//         case "MON113": case "MON114": case "MON115":
+//           if($cardType == "AA" && NumAttacksBlocking() == 1) {
+//               AddCharacterEffect($otherPlayer, $combatChainState[$CCS_WeaponIndex], $currentTurnEffects[$i]);
+//               WriteLog(CardLink($currentTurnEffects[$i], $currentTurnEffects[$i]) . " gives your weapon +1 for the rest of the turn.");
+//           }
+//           break;
+//         default:
+//           break;
+//       }
+//     }
+//     if($remove) RemoveCurrentTurnEffect($i);
+//   }
+//   $currentTurnEffects = array_values($currentTurnEffects);
+//   switch($combatChain[0]) {
+//     case "CRU079": case "CRU080":
+//       if($cardType == "AA" && NumAttacksBlocking() == 1) {
+//         AddCharacterEffect($otherPlayer, $combatChainState[$CCS_WeaponIndex], $combatChain[0]);
+//         WriteLog(CardLink($combatChain[0], $combatChain[0]) . " got +1 for the rest of the turn.");
+//       }
+//       break;
+//     default:
+//       break;
+//   }
+// }
 
 function NumNonEquipmentDefended()
 {
@@ -357,26 +366,27 @@ function NumNonEquipmentDefended()
   return $number;
 }
 
-function CombatChainPlayAbility($cardID)
-{
-  global $combatChain, $defPlayer;
-  for($i = 0; $i < count($combatChain); $i += CombatChainPieces()) {
-    switch($combatChain[$i]) {
-      case "EVR122":
-        if(ClassContains($cardID, "WIZARD", $defPlayer)) {
-          $combatChain[$i + 6] += 2;
-          WriteLog(CardLink($combatChain[$i], $combatChain[$i]) . " gets +2 defense");
-        }
-        break;
-      default: break;
-    }
-  }
-}
+//FAB
+// function CombatChainPlayAbility($cardID)
+// {
+//   global $combatChain, $defPlayer;
+//   for($i = 0; $i < count($combatChain); $i += CombatChainPieces()) {
+//     switch($combatChain[$i]) {
+//       case "EVR122":
+//         if(ClassContains($cardID, "WIZARD", $defPlayer)) {
+//           $combatChain[$i + 6] += 2;
+//           WriteLog(CardLink($combatChain[$i], $combatChain[$i]) . " gets +2 defense");
+//         }
+//         break;
+//       default: break;
+//     }
+//   }
+// }
 
 function IsDominateActive()
 {
   global $currentTurnEffects, $mainPlayer, $CCS_WeaponIndex, $combatChain, $combatChainState;
-  global $CS_NumAuras, $CCS_NumBoosted, $chainLinks, $chainLinkSummary;
+  global $CS_NumAuras, $chainLinks, $chainLinkSummary;
   if(count($combatChain) == 0) return false;
   if(SearchCurrentTurnEffectsForCycle("EVR097", "EVR098", "EVR099", $mainPlayer)) return false;
   $characterEffects = GetCharacterEffects($mainPlayer);
@@ -392,33 +402,8 @@ function IsDominateActive()
     }
   }
   switch($combatChain[0]) {
-    case "WTR095": case "WTR096": case "WTR097": return ComboActive();
-    case "WTR179": case "WTR180": case "WTR181": return true;
-    case "ARC080": return true;
-    case "MON004": return true;
-    case "MON023": case "MON024": case "MON025": return true;
-    case "MON246": return SearchDiscard($mainPlayer, "AA") == "";
-    case "MON275": case "MON276": case "MON277": return true;
-    case "ELE209": case "ELE210": case "ELE211": return HasIncreasedAttack();
-    case "EVR027": case "EVR028": case "EVR029": return true;
-    case "EVR038": return ComboActive();
-    case "EVR076": case "EVR077": case "EVR078": return $combatChainState[$CCS_NumBoosted] > 0;
-    case "EVR110": case "EVR111": case "EVR112": return GetClassState($mainPlayer, $CS_NumAuras) > 0;
-    case "EVR138":
-      $hasDominate = false;
-      for($i = 0; $i < count($chainLinks); ++$i)
-      {
-        for($j = 0; $j < count($chainLinks[$i]); $j += ChainLinksPieces())
-        {
-          $isIllusionist = ClassContains($chainLinks[$i][$j], "ILLUSIONIST", $mainPlayer) || ($j == 0 && DelimStringContains($chainLinkSummary[$i*ChainLinkSummaryPieces()+3], "ILLUSIONIST"));
-          if($chainLinks[$i][$j+2] == "1" && $chainLinks[$i][$j] != "EVR138" && $isIllusionist && CardType($chainLinks[$i][$j]) == "AA")
-          {
-              if(!$hasDominate) $hasDominate = HasDominate($chainLinks[$i][$j]);
-          }
-        }
-      }
-      return $hasDominate;
-    case "OUT027": case "OUT028": case "OUT029": return true;
+
+
     default: break;
   }
   return false;

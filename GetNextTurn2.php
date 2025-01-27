@@ -92,29 +92,30 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     $oppStatus = $cacheArr[$otherP + 2];
     $timeDiff = $currentTime - $oppLastTime;
     $otherPlayerDisconnectStatus = GetCachePiece($gameName, $otherP + 14);
+    $gameState = intval($cacheArr[13]);
     $lastActionTime = intval($cacheArr[16]);
     $lastActionWarning = intval($cacheArr[17]);
     $finalWarning = intval($cacheArr[18]);
-    if (GetCachePiece($gameName, 14) == 6 && $timeDiff > 10_000 && $oppStatus == "0") {
+    if ($gameState == 6 && $timeDiff > 10_000 && $oppStatus == "0") {
       WriteLog("Player $otherP has disconnected.");
       $opponentDisconnected = true;
       SetCachePiece($gameName, $otherP + 3, "2");
       SetCachePiece($gameName, 14, 7);//$MGS_StatsLoggedIrreversible
       GamestateUpdated($gameName);
     } else {
-      if ($timeDiff > $DisconnectFirstWarningMS && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
+      if ($gameState == 5 && $timeDiff > $DisconnectFirstWarningMS && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
         $warningSeconds = ($DisconnectTimeoutMS - $DisconnectFirstWarningMS) / 1000;
         WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>Player $otherP, are you still there? Your opponent will be allowed to claim victory in $warningSeconds seconds if no activity is detected.");
         IncrementCachePiece($gameName, $otherP + 14);
         GamestateUpdated($gameName);
       }
-      if ($timeDiff > $DisconnectFinalWarningMS && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
+      if ($gameState == 5 && $timeDiff > $DisconnectFinalWarningMS && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
         $finalWarningSeconds = ($DisconnectTimeoutMS - $DisconnectFinalWarningMS) / 1000;
         WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>$finalWarningSeconds seconds left, Player $otherP...");
         IncrementCachePiece($gameName, $otherP + 14);
         GamestateUpdated($gameName);
       }
-      if ($timeDiff > $DisconnectTimeoutMS && $otherPlayerDisconnectStatus == 2 && ($oppStatus == "0")) {
+      if ($gameState == 5 && $timeDiff > $DisconnectTimeoutMS && $otherPlayerDisconnectStatus == 2 && ($oppStatus == "0")) {
         WriteLog("Player $otherP has disconnected.");
         $opponentDisconnected = true;
         SetCachePiece($gameName, $otherP + 3, "2");
@@ -130,7 +131,7 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         $lastUpdate = 0;
       }
 
-      if ($lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputWarningMS && $lastActionWarning === 0 && $finalWarning == 0) {
+      if ($gameState == 5 && $lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputWarningMS && $lastActionWarning === 0 && $finalWarning == 0) {
         $inputWarningSeconds = $InputWarningMS / 1000;
         $inputWarningSecondsLeft = ($InputTimeoutMS - $InputWarningMS) / 1000;
         WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>No input in over $inputWarningSeconds seconds; Player $playerID has $inputWarningSecondsLeft more seconds to take an action or the turn will be passed");
@@ -138,10 +139,10 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         GamestateUpdated($gameName);
       }
 
-      if ($lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning > 0) {
+      if ($gameState == 5 && $lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning > 0) {
         $currentPlayerInputTimeout = true;
         $lastUpdate = 0;
-      } else if ($lastCurrentPlayer == $otherP && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning == $otherP && $finalWarning == $otherP) {
+      } else if ($gameState == 5 && $lastCurrentPlayer == $otherP && ($currentTime - $lastActionTime) > $InputTimeoutMS && $lastActionWarning == $otherP && $finalWarning == $otherP) {
         WriteLog("Player $otherP has disconnected.");
         $opponentDisconnected = true;
         SetCachePiece($gameName, $otherP + 3, "2");
@@ -457,7 +458,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
           // Count the number of tiles with the same name if the layer is tileable
           $nbTiles = IsTileable($layerName) ? array_reduce($layers, function($count, $layer, $index) use ($layerName, $layerPieces) {
-              $name = ($layer == "LAYER" || IsAbilityLayer($layer)) ? $layers[$index + 2] : $layer;
+              $name = ($layer == "LAYER" || IsAbilityLayer($layer)) ? $layers[$index + 2] : $layer;//TODO: look into hoow this gets called
               return $name == $layerName ? $count + 1 : $count;
           }, 0) : 0;
 
@@ -479,7 +480,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
           $content .= "<div class='tile' style='max-width:{$cardSize}px;'>" . Card($cardId, "concat", $cardSize, 0, 1, 0, $layerColor, $counters, controller: $layerController);
 
           // Add reorder buttons for ability layers if applicable
-          if (IsAbilityLayer($layers[$i]) && $dqState[8] >= $i && $playerID == $mainPlayer) {
+          if (IsAbilityLayer($layers[$i]) && ($dqState[8] >= $i || LayersHaveTriggersToResolve()) && $playerID == $mainPlayer) {
               if ($i < $dqState[8]) {
                   $content .= "<span class='reorder-button'>" . CreateButton($playerID, ">", 31, $i, "18px", useInput:true) . "</span>";
               }
@@ -515,6 +516,8 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       if ($playerID != 3) {
         $time = ($playerID == 1 ? $p1TotalTime : $p2TotalTime);
         $totalTime = $p1TotalTime + $p2TotalTime;
+        $content .= "<BR><BR><b style='font-size: 24px;'>Import your deck on <a href='https://swustats.net'>swustats.net</a> to track your deck stats over time!</b><BR>";
+        $content .= "<i>(You will need to use the SWU Stats link to play for stats to track)</i><br>";
         $content .= "<BR><span class='Time-Span'>Your Play Time: " . intval($time / 60) . "m" . $time % 60 . "s - Game Time: " . intval($totalTime / 60) . "m" . $totalTime % 60 . "s</span>";
       }
     }
@@ -564,7 +567,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
   }
 
   if (($turn[0] == "OPT" || $turn[0] == "CHOOSETOP" || $turn[0] == "MAYCHOOSETOP" || $turn[0] == "CHOOSEBOTTOM" || $turn[0] == "CHOOSECARD" || $turn[0] == "MAYCHOOSECARD") && $turn[1] == $playerID) {
-    $content = "<table><tr>";
+    $content = "<table style='margin: 0 auto;'><tr>";
     $options = explode(",", $turn[2]);
     for ($i = 0; $i < count($options); ++$i) {
       $content .= "<td>";
@@ -669,8 +672,8 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       else if ($option[0] == "THEIRPITCH") $source = $theirPitch;
       else if ($option[0] == "MYDECK") $source = $myDeck;
       else if ($option[0] == "THEIRDECK") $source = $theirDeck;
-      else if ($option[0] == "MYMATERIAL") $source = $myMaterial;
-      else if ($option[0] == "THEIRMATERIAL") $source = $theirMaterial;
+      // else if ($option[0] == "MYMATERIAL") $source = $myMaterial;//FAB
+      // else if ($option[0] == "THEIRMATERIAL") $source = $theirMaterial;//FAB
       else if ($option[0] == "MYRESOURCES") $source = &GetMemory($playerID);
       else if ($option[0] == "THEIRRESOURCES") $source = &GetMemory($playerID == 1 ? 2 : 1);
       else if ($option[0] == "LANDMARK") $source = $landmarks;
@@ -826,7 +829,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.5) 70%);
       }
     </style>";
-    
+
     $content .= "<div class='card-container'>";
     for ($i = 0; $i < count($options); ++$i) {
       $submitLink = ProcessInputLink($playerID, 36, $i, "onclick");
@@ -1001,7 +1004,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'overlay' => $theirAllies[$i + 1] != 2 ? 1 : 0,
         'cloned' => $theirAllies[$i + 13] == 1,
       );
-      $cardArena = CardArenas($theirAllies[$i]);
+      $cardArena = $ally->CurrentArena();
       //Their Unit Spacing
       if($cardArena == "Ground") $cardText = '<div id="unique-' . $theirAllies[$i+5] . '" class="cardContainer ' . ($theirAllies[$i + 1] != 2 ? 'exhausted' : '') . '">';
       else $cardText = '<div id="unique-' . $theirAllies[$i+5] . '" class="cardContainer ' . ($theirAllies[$i + 1] != 2 ? 'exhausted' : '') . '">';
@@ -1138,7 +1141,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'overlay' => $myAllies[$i + 1] != 2 ? 1 : 0,
         'cloned' => $myAllies[$i + 13] == 1,
       );
-      $cardArena = CardArenas($myAllies[$i]);
+      $cardArena = $ally->CurrentArena();
       //My Unit Spacing
       if($cardArena == "Ground") $cardText = '<div id="unique-' . $myAllies[$i+5] . '" class="cardContainer ' . ($myAllies[$i + 1] != 2 ? 'exhausted' : '') . '">';
       else $cardText = '<div id="unique-' . $myAllies[$i+5] . '" class="cardContainer ' . ($myAllies[$i + 1] != 2 ? 'exhausted' : '') . '">';

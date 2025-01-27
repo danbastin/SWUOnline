@@ -1,4 +1,5 @@
 <?php
+include_once "./Libraries/IOLibraries.php";
 
 function initializePlayerState($handler, $deckHandler, $player)
 {
@@ -45,7 +46,7 @@ function initializePlayerState($handler, $deckHandler, $player)
   fwrite($handler, "\r\n"); //Discard
   fwrite($handler, "\r\n"); //Pitch
   fwrite($handler, "\r\n"); //Banish
-  fwrite($handler, "0 0 0 0 0 0 0 0 DOWN 0 -1 0 0 0 0 0 0 -1 0 0 0 0 NA 0 0 0 - -1 0 0 0 0 0 0 - 0 0 0 0 0 0 0 0 - - 0 -1 0 0 0 0 0 - 0 0 0 0 0 -1 0 - 0 0 - 0 0 0 - -1 0 0\r\n"); //Class State
+  fwrite($handler, "0 0 0 0 0 0 0 0 DOWN 0 -1 0 0 0 0 0 0 -1 0 0 0 0 NA 0 0 0 - -1 0 0 0 0 0 0 - 0 0 0 0 0 0 0 0 - - 0 -1 0 0 0 0 0 - 0 0 0 0 0 -1 0 - 0 0 - 0 0 0 - -1 0 0 -\r\n"); //Class State
   fwrite($handler, "\r\n"); //Character effects
   fwrite($handler, implode(" ", $materialDeck) . "\r\n");//Material deck
   fwrite($handler, "\r\n"); //Card Stats
@@ -89,13 +90,6 @@ function SettingDefaultValue($setting, $hero)
     case $SET_Playmat: return ($hero == "DUMMY" ? 8 : 0);
     default: return "0";
   }
-}
-
-function GetArray($handler)
-{
-  $line = trim(fgets($handler));
-  if ($line == "") return [];
-  return explode(" ", $line);
 }
 
 ?>

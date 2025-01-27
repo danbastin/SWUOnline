@@ -52,6 +52,12 @@ $response->cardBacks[] = $cardBack;
 $cardBack->name = "RVA SWU";
 $cardBack->id = 12;
 $response->cardBacks[] = $cardBack;
+$cardBack->name = "Baddest Batch";
+$cardBack->id = 13;
+$response->cardBacks[] = $cardBack;
+$cardBack->name = "Force Fam";
+$cardBack->id = 14;
+$response->cardBacks[] = $cardBack;
 
 $response->playmats = [];
 if(IsUserLoggedIn()) {

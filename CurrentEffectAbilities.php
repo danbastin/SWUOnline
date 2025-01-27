@@ -27,7 +27,7 @@ function EffectHitEffect($cardID)
       break;
     case "5630404651-1"://MagnaGuard Wing Leader
       AddCurrentTurnEffectFromCombat("5630404651-2", $mainPlayer);
-      break;      
+      break;
     default:
       break;
   }
@@ -46,6 +46,7 @@ function FinalizeChainLinkEffects()
         PrependDecisionQueue("SWAPTURN", $mainPlayer, "-");
         PrependDecisionQueue("ELSE", $mainPlayer, "-");
         PrependDecisionQueue("MZOP", $mainPlayer, "ATTACK", 1);
+        PrependDecisionQueue("MZOP", $mainPlayer, "GETUNIQUEID", 1);
         PrependDecisionQueue("CHOOSEMULTIZONE", $mainPlayer, "<-", 1);
         PrependDecisionQueue("SETDQCONTEXT", $mainPlayer, "Choose a unit to attack with");
         PrependDecisionQueue("MZFILTER", $mainPlayer, "status=1");
@@ -137,7 +138,9 @@ function EffectAttackModifier($cardID, $playerID="")
     case "8022262805": return 2;//Bold Resistance
     case "2587711125": return -4;//Disarm
     case "2569134232": return -4;//Jedha City
-    case "1323728003": return -1;//Electrostaff
+    case "6300552434"://Gold Leader
+    case "1323728003"://Electrostaff
+      return -1;
     case "2651321164": return 2;//Tactical Advantage
     case "1701265931": return 4;//Moment of Glory
     case "1900571801": return 2;//Overwhelming Barrage
@@ -327,6 +330,12 @@ function CurrentEffectCostModifiers($cardID, $from, $reportMode=false)
             $costModifier -= 99;
             $remove = true;
             break;
+          case "4113123883"://Unnatural Life
+            if($from != "PLAY") {
+              $costModifier -= 2;
+              $remove = true;
+            }
+            break;
           case "3426168686"://Sneak Attack
             if($from != "PLAY") {
               $costModifier -= 3;
@@ -349,7 +358,7 @@ function CurrentEffectCostModifiers($cardID, $from, $reportMode=false)
             $costModifier -= 1;
             $remove = true;
             break;
-          case "8506660490"://Darth Vader
+          case "8506660490"://Darth Vader (Commanding the First Legion)
             $costModifier -= 99;
             $remove = true;
             break;
@@ -424,6 +433,15 @@ function CurrentEffectCostModifiers($cardID, $from, $reportMode=false)
               $remove = true;
             }
             break;
+          //Jump to Lightspeed
+          case "4030832630"://Admiral Piett
+            $costModifier -= 1;
+            $remove = true;
+            break;
+          case "0011262813"://Wedge Antilles Leader
+            $costModifier -= 1;
+            $remove = true;
+            break;
           default: break;
         }
       }
@@ -449,26 +467,27 @@ function CurrentEffectPreventDamagePrevention($player, $type, $damage, $source)
   return $damage;
 }
 
-function CurrentEffectDamagePrevention($player, $type, $damage, $source, $preventable, $uniqueID=-1)
-{
-  global $currentPlayer, $currentTurnEffects;
-  for($i = count($currentTurnEffects) - CurrentTurnEffectPieces(); $i >= 0 && $damage > 0; $i -= CurrentTurnEffectPieces()) {
-    if($uniqueID != -1 && $currentTurnEffects[$i + 2] != $uniqueID) continue;
-    $remove = false;
-    if($currentTurnEffects[$i + 1] == $player || $uniqueID != -1) {
-      $effects = explode("-", $currentTurnEffects[$i]);
-      switch($effects[0]) {
-        case "pv4n1n3gyg"://Cleric's Robe
-          if($preventable) $damage -= 1;
-          $remove = true;
-          break;
-        default: break;
-      }
-      if($remove) RemoveCurrentTurnEffect($i);
-    }
-  }
-  return $damage;
-}
+//FAB
+// function CurrentEffectDamagePrevention($player, $type, $damage, $source, $preventable, $uniqueID=-1)
+// {
+//   global $currentPlayer, $currentTurnEffects;
+//   for($i = count($currentTurnEffects) - CurrentTurnEffectPieces(); $i >= 0 && $damage > 0; $i -= CurrentTurnEffectPieces()) {
+//     if($uniqueID != -1 && $currentTurnEffects[$i + 2] != $uniqueID) continue;
+//     $remove = false;
+//     if($currentTurnEffects[$i + 1] == $player || $uniqueID != -1) {
+//       $effects = explode("-", $currentTurnEffects[$i]);
+//       switch($effects[0]) {
+//         case "pv4n1n3gyg"://Cleric's Robe
+//           if($preventable) $damage -= 1;
+//           $remove = true;
+//           break;
+//         default: break;
+//       }
+//       if($remove) RemoveCurrentTurnEffect($i);
+//     }
+//   }
+//   return $damage;
+// }
 
 function CurrentEffectAttackAbility()
 {
@@ -629,6 +648,7 @@ function CurrentEffectEndTurnAbilities()
       AddNextTurnEffect($currentTurnEffects[$i], $currentTurnEffects[$i + 1]);
     }
     switch($cardID) {
+      case "4113123883-2"://Unnatural Life
       case "3426168686-2"://Sneak Attack
       case "7270736993-2"://Unrefusable Offer
         $ally = new Ally("MYALLY-" . SearchAlliesForUniqueID($currentTurnEffects[$i+2], $currentTurnEffects[$i+1]), $currentTurnEffects[$i+1]);
@@ -655,7 +675,7 @@ function CurrentEffectEndTurnAbilities()
         $allyIndex = SearchAlliesForUniqueID($currentTurnEffects[$i+2], $currentTurnEffects[$i+1]);
         if($allyIndex > -1) {
           $ally = new Ally("MYALLY-" . $allyIndex, $currentTurnEffects[$i+1]);
-          $ally->DefeatUpgrade("8752877738");
+          $ally->DefeatUpgrade("8752877738");//Shield Token
         }
         break;
       case "8418001763"://Huyang
@@ -772,7 +792,9 @@ function IsCombatEffectActive($cardID)
   {
     case "2587711125": return true;//Disarm
     case "2569134232": return true;//Jedha City
-    case "1323728003": return true;//Electrostaff
+    case "6300552434"://Gold Leader
+    case "1323728003"://Electrostaff
+      return true;
     case "3809048641": return true;//Surprise Strike
     case "9757839764": return true;//Adelphi Patrol Wing
     case "3038238423": return true;//Fleet Lieutenant

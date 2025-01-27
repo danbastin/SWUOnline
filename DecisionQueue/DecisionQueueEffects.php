@@ -9,16 +9,16 @@ function ModalAbilities($player, $card, $lastResult)
       $otherPlayer = ($player == 1 ? 2 : 1);
       switch($lastResult) {
         case 0: // Deal damage
-          DealDamageAsync($otherPlayer, 3, "DAMAGE", "3232845719"); 
+          DealDamageAsync($otherPlayer, 3, "DAMAGE", "3232845719");
           break;
         case 1: // Discard a card
-          PummelHit($otherPlayer); 
+          PummelHit($otherPlayer);
           break;
         default: break;
       }
       return $lastResult;
     case "OUTMANEUVER":
-      $arena = $lastResult == 0 ? "Ground" : "Space";
+      $arena = $lastResult == 0 ? "Space" : "Ground";
       ExhaustAllAllies($arena, 1);
       ExhaustAllAllies($arena, 2);
       return $lastResult;
@@ -29,7 +29,7 @@ function ModalAbilities($player, $card, $lastResult)
           MZPlayCard($player, "MYDECK-0");
           break;
         case 1: // Discard it
-          Mill($player, 1); 
+          Mill($player, 1);
           break;
         case 2: // Leave it
           break;
@@ -39,7 +39,7 @@ function ModalAbilities($player, $card, $lastResult)
     case "LEIAORGANA":
       switch($lastResult) {
         case 0: // Ready a resource
-          ReadyResource($player); 
+          ReadyResource($player);
           break;
         case 1: // Exhaust a unit
           AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY");
@@ -51,9 +51,32 @@ function ModalAbilities($player, $card, $lastResult)
       }
       return $lastResult;
     case "BOMBINGRUN":
-      $arena = $lastResult == 0 ? "Ground" : "Space";
+      $arena = $lastResult == 0 ? "Space" : "Ground";
       DamageAllAllies(3, "7916724925", arena:$arena);
       return 1;
+    case "POEDAMERON":
+      switch($lastResult) {
+        case 0: // Deal damage
+          PummelHit($player, may:true, context:"Discard a card to deal 2 damage to a unit or base");
+          $otherPlayer = ($player == 1 ? 2 : 1);
+          AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY", 1);
+          AddDecisionQueue("PREPENDLASTRESULT", $player, "MYCHAR-0,THEIRCHAR-0,", 1);
+          AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit or base to deal 2 damage to", 1);
+          AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+          AddDecisionQueue("MZOP", $player, "DEALDAMAGE,2,$player", 1);
+          break;
+        case 1: // Defeat an upgrade
+          PummelHit($player, may:true, context:"Discard a card to defeat an upgrade");
+          DefeatUpgrade($player, passable:true);
+          break;
+        case 2: // Opponent discards a card
+          PummelHit($player, may:true, context:"Discard a card to force your opponent to discard a card");
+          $otherPlayer = ($player == 1 ? 2 : 1);
+          PummelHit($otherPlayer, passable:true);
+          break;
+        default: break;
+      }
+      return $lastResult;
     case "VIGILANCE":
       switch($lastResult) {
         case 0: // Mill opponent
@@ -147,7 +170,7 @@ function ModalAbilities($player, $card, $lastResult)
           break;
         case 3: // Discard a card
           $otherPlayer = ($player == 1 ? 2 : 1);
-          DiscardRandom($otherPlayer, "3789633661");
+          AddDecisionQueue("OP", $otherPlayer, "DISCARDRANDOM,3789633661");
           break;
         default: break;
       }
@@ -186,6 +209,7 @@ function ModalAbilities($player, $card, $lastResult)
           AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to attack with");
           AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
           AddDecisionQueue("MZOP", $player, "READY", 1);
+          AddDecisionQueue("MZALLCARDTRAITORPASS", $player, "Wookiee", 1);
           AddDecisionQueue("MZOP", $player, "ADDEFFECT,7578472075", 1);
           AddDecisionQueue("MZOP", $player, "ATTACK", 1);
           break;
@@ -275,10 +299,11 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       break;
     case "CLEARTHEFIELD":
       $otherPlayer = $player == 1 ? 2 : 1;
-      $cardID = GetMZCard($player, $lastResult);
-      $cardTitle = CardTitle($cardID);
+      $ally = new Ally($lastResult);
+      $cardTitle = CardTitle($ally->CardID());
+      MZBounce($player, $ally->MZIndex());
       $targetCards = SearchAlliesUniqueIDForTitle($otherPlayer, $cardTitle);
-      $targetCardsArr = explode(",", $targetCards);
+      $targetCardsArr = $targetCards ? explode(",", $targetCards) : [];
 
       for ($i = 0; $i < count($targetCardsArr); ++$i) {
         $targetAlly = new Ally($targetCardsArr[$i]);
@@ -476,8 +501,8 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       PrependDecisionQueue("SETDQCONTEXT", $player, "Do you want to continue? (Damage: " . $dqVars[1] . ")");
       return $lastResult;
     case "ADMIRALACKBAR":
-      $targetCard = GetMZCard($player, $lastResult);
-      $damage = SearchCount(SearchAllies($player, arena:CardArenas($targetCard)));
+      $targetAlly = new Ally($lastResult, MZPlayerID($player, $lastResult));
+      $damage = SearchCount(SearchAllies($player, arena:$targetAlly->CurrentArena()));
       AddDecisionQueue("PASSPARAMETER", $player, $lastResult);
       AddDecisionQueue("MZOP", $player, "DEALDAMAGE," . $damage, 1);
       return $lastResult;
@@ -497,7 +522,7 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       if($lastResult == "PASS") {
         return $lastResult;
       }
-      
+
       for($i=0; $i<count($lastResult); ++$i) {
         $ally = new Ally("MYALLY-" . $lastResult[$i], $player);
         $ally->Ready();
@@ -717,7 +742,8 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       $opponent = $player == 1 ? 2: 1;
       for($i = 0; $i < count($unitsThatAttackedBase); ++$i) {
         $targetMZIndex = "THEIRALLY-" . SearchAlliesForUniqueID($unitsThatAttackedBase[$i], $opponent);
-        if($targetMZIndex == "THEIRALLY--1" || IsLeader(GetMZCard($player, $targetMZIndex))) continue;
+        $ally = new Ally($targetMZIndex, $player);
+        if($targetMZIndex == "THEIRALLY--1" || $ally->IsLeader()) continue;
         DecisionQueueStaticEffect("MZOP", $player, "CAPTURE," . $lastResult, $targetMZIndex);
       }
       return 1;
@@ -763,18 +789,6 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       break;
     case "LETHALCRACKDOWN":
       DealDamageAsync($player, CardPower($lastResult), "DAMAGE", "1389085256");
-      break;
-    case "TWI_PALPATINE_HERO":
-      Draw($player);
-      Restore(2, $player);
-      $char = &GetPlayerCharacter($player);
-      $char[CharacterPieces()] = "ad86d54e97";
-      break;
-    case "TWI_DARTHSIDIOUS_HERO":
-      CreateCloneTrooper($player);
-      DealDamageAsync(($player == 1 ? 2 : 1), 2, "DAMAGE", "ad86d54e97");
-      $char = &GetPlayerCharacter($player);
-      $char[CharacterPieces()] = "0026166404"; // Chancellor Palpatine Leader
       break;
     case "LUXBONTERI":
       $ally = new Ally($lastResult, MZPlayerID($player, $lastResult));
