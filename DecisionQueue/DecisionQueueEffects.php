@@ -120,7 +120,7 @@ function ModalAbilities($player, $card, $lastResult)
           AddDecisionQueue("SETDQVAR", $player, "0", 1);
           AddDecisionQueue("MULTIZONEINDICES", $player, "THEIRALLY");
           AddDecisionQueue("MZFILTER", $player, "unique=1");
-          AddDecisionQueue("MZFILTER", $player, "definedType=Leader");
+          AddDecisionQueue("MZFILTER", $player, "definedType=Leader");//are leaders not already marked as unique?
           AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to damage");
           AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
           AddDecisionQueue("MZOP", $player, "{0}", 1);
@@ -147,7 +147,7 @@ function ModalAbilities($player, $card, $lastResult)
       switch($lastResult) {
         case 0: // Return unit
           AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:maxAttack=4&THEIRALLY:maxAttack=4");
-          AddDecisionQueue("MZFILTER", $player, "definedType=Leader");
+          AddDecisionQueue("MZFILTER", $player, "leader=1");
           AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to return", 1);
           AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
           AddDecisionQueue("MZOP", $player, "BOUNCE", 1);
@@ -263,8 +263,18 @@ function SpecificCardLogic($player, $parameter, $lastResult)
   global $dqVars;
   $parameterArr = explode(",", $parameter);
   $card = $parameterArr[0];
+  $otherPlayer = ($player == 1 ? 2 : 1);
   switch($card)
   {
+    case "SABINEWREN_TWI":
+      $card = Mill($player, 1);
+      if (!SharesAspect($card, GetPlayerBase($player))) {
+        AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:arena=Ground&THEIRALLY:arena=Ground");
+        AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to deal 2 damage");
+        AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+        AddDecisionQueue("MZOP", $player, "DEALDAMAGE,2,$player,1", 1);
+      }
+      break;
     case "CAUGHTINTHECROSSFIRE":
       $cardArr = explode(",", $dqVars[0]);
       rsort($cardArr); // Sort the cards by index, with the highest first, to prevent errors caused by index changes after defeat.
@@ -298,7 +308,6 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       AddDecisionQueue("MZOP", $player, "PLAYCARD", 1);
       break;
     case "CLEARTHEFIELD":
-      $otherPlayer = $player == 1 ? 2 : 1;
       $ally = new Ally($lastResult);
       $cardTitle = CardTitle($ally->CardID());
       MZBounce($player, $ally->MZIndex());
@@ -313,7 +322,6 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       }
       break;
     case "RESOLUTE":
-      $otherPlayer = $player == 1 ? 2 : 1;
       $cardID = GetMZCard($player, $lastResult);
       $cardTitle = CardTitle($cardID);
       $targetCards = SearchAlliesUniqueIDForTitle($otherPlayer, $cardTitle);
@@ -401,8 +409,13 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       }
       break;
     case "THEEMPERORSLEGION":
-      MZMoveCard($player, "MYDISCARD:definedType=Unit", "MYHAND", may:true, context:"Choose ONLY units defeated this phase then pass");
-      AddDecisionQueue("SPECIFICCARD", $player, "THEEMPERORSLEGION", 1);
+      $search = SearchDiscard($player, definedType:"Unit", defeatedThisPhase:true);
+      if (SearchCount($search) > 0) {
+        $indices = explode(",", $search);
+        for ($i = count($indices) - 1; $i >= 0; $i--) {
+          MZMoveCard($player, "", "MYHAND", mzIndex:"MYDISCARD-" . $indices[$i]);
+        }
+      }
       break;
     case "UWINGREINFORCEMENT":
       $totalCost = 0;
@@ -758,17 +771,26 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       PrependDecisionQueue("NOPASS", $owner, "-", 1);
       PrependDecisionQueue("YESNO", $owner, "if you want to play " . CardLink($cardID, $cardID) . " for free");
       return 1;
+    case "FLEETLIEUTENANT":
+      $ally = new Ally($lastResult, $player);
+
+      if (TraitContains($ally->CardID(), "Rebel", $player)) {
+        AddDecisionQueue("PASSPARAMETER", $player, $ally->UniqueID());
+        AddDecisionQueue("ADDLIMITEDCURRENTEFFECT", $player, "3038238423,HAND"); //Fleet Lieutenant
+      }
+
+      AddDecisionQueue("PASSPARAMETER", $player, $ally->MZIndex());
+      AddDecisionQueue("MZOP", $player, "ATTACK");
+      break;
     case "YODAOLDMASTER":
       if($lastResult == "Both") {
         WriteLog("Both player drew a card from Yoda, Old Master");
-        $otherPlayer = $player == 1 ? 2 : 1;
         Draw($player);
         Draw($otherPlayer);
       } else if($lastResult == "Yourself") {
         WriteLog("Player $player drew a card from Yoda, Old Master");
         Draw($player);
       } else {
-        $otherPlayer = $player == 1 ? 2 : 1;
         WriteLog("Player $otherPlayer drew a card from Yoda, Old Master");
         Draw($otherPlayer);
       }
@@ -795,6 +817,63 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       if($ally->IsExhausted()) $ally->Ready();
       else $ally->Exhaust();
       break;
+    //Jump to Lightspeed
+    case "BOBA_FETT_LEADER_JTL":
+      IndirectDamage($otherPlayer, 1);
+      break;
+    case "HAN_SOLO_LEADER_JTL":
+      $ally = new Ally($lastResult, $player);
+      $attackerCost = CardCost($ally->CardID());
+      $attackerCostIsOdd = $attackerCost % 2 == 1;
+      $odds = $dqVars[0];
+      $oddsIsOdd = $odds % 2 == 1;
+      if($attackerCostIsOdd && $oddsIsOdd && $attackerCost != $odds) {
+        AddCurrentTurnEffect("0616724418", $player);
+      }
+      AddDecisionQueue("MZOP", $player, "ATTACK", 1);
+      return $lastResult;
+    case "LEIA_JTL":
+      $ally = new Ally($lastResult, $player);
+      AddDecisionQueue("PASSPARAMETER", $player, $ally->UniqueID());
+      AddDecisionQueue("ADDLIMITEDCURRENTEFFECT", $player, "7924461681,HAND");
+      AddDecisionQueue("PASSPARAMETER", $player, $ally->MZIndex());
+      AddDecisionQueue("MZOP", $player, "ATTACK");
+      break;
+    case "THRAWN_JTL":
+      $data = explode(",", $dqVars[1]);
+      $target = $data[0];
+      $leaderUnitSide = $data[1];
+      $trigger = $data[2];
+      $dd=DeserializeAllyDestroyData($trigger);
+      AllyDestroyedAbility($player, $target, $dd["UniqueID"], $dd["LostAbilities"],$dd["IsUpgraded"],$dd["Upgrades"],$dd["UpgradesWithOwnerData"]);
+      if($leaderUnitSide == "1") {
+        $thrawnLeaderUnit = new Ally("MYALLY-" . SearchAlliesForCard($player, "53207e4131"));
+        if($thrawnLeaderUnit->Exists()) {
+          $thrawnLeaderUnit->SumNumUses(-1);
+        }
+      }
+      break;
+    case "ACKBAR_JTL":
+      $ally = new Ally($lastResult);
+      CreateXWing($ally->Controller());
+      break;
+    case "PROFUNDITY":
+      $playerChosen = $lastResult == "Yourself" ? $player : $otherPlayer;
+      WriteLog("Player $playerChosen discarded a card from Profundity");
+      PummelHit($playerChosen);
+
+      if($playerChosen == $otherPlayer && (CountHand($player) < (CountHand($otherPlayer) - 1))) {
+        WriteLog("Player $otherPlayer discarded another card from Profundity");
+        PummelHit($otherPlayer);
+      }
+      break;
+    case "TURBOLASERSALVO":
+      $arena = $dqVars[0];
+      $damage = $dqVars[1];
+      $otherPlayer = $player == 1 ? 2 : 1;
+      DamagePlayerAllies($otherPlayer, $damage, "8174214418", arena:$arena);
+      break;
+    //SpecificCardLogic End
     default: return "";
   }
 }

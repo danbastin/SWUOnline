@@ -165,6 +165,10 @@ class Ally {
     return $this->Damage() > 0;
   }
 
+  function IsUnique() {
+    return CardIsUnique($this->CardID());
+  }
+
   function CanAddPilot() {
     $maxPilots = 1;
     $currentPilots = 0;
@@ -185,9 +189,18 @@ class Ally {
     return $currentPilots < $maxPilots;
   }
 
+  function HasPilot() {
+    $subcards = $this->GetUpgrades(withMetadata:true);
+    for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
+      if($subcards[$i+2] == "1") return true;
+    }
+    return false;
+  }
+
   function ReceivingPilot($cardID, $player = "") {
     global $CS_PlayedAsUpgrade;
     if($player == "") $player = $this->PlayerID();
+
     return PilotingCost($cardID) >= 0 && GetClassState($player, $CS_PlayedAsUpgrade) == "1";
   }
 
@@ -209,7 +222,9 @@ class Ally {
   }
 
   //Returns true if the ally is destroyed
-  function DealDamage($amount, $bypassShield = false, $fromCombat = false, &$damageDealt = NULL, $enemyDamage = false, $fromUnitEffect=false, $preventable=true) {
+  function DealDamage($amount, $bypassShield = false, $fromCombat = false, &$damageDealt = NULL,
+      $enemyDamage = false, $fromUnitEffect=false, $preventable=true, $indirectDamage=false)
+  {
     global $currentTurnEffects;
     if($this->index == -1 || $amount <= 0) return false;
     if(!$preventable) $bypassShield = true;
@@ -221,11 +236,11 @@ class Ally {
     //Upgrade damage prevention
     if($preventable) {
       $subcards = $this->GetSubcards();
-      for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
+      for ($i = count($subcards) - SubcardPieces(); $i >= 0; $i -= SubcardPieces()) {
         if($subcards[$i] == "8752877738") {//Shield Token
-          unset($subcards[$i+2]);
-          unset($subcards[$i+1]);
-          unset($subcards[$i]);
+          for ($j = SubcardPieces() - 1; $j >= 0; $j--) {
+            unset($subcards[$i+$j]);
+          }
           $subcards = array_values($subcards);
           $this->allies[$this->index+4] = count($subcards) > 0 ? implode(",", $subcards) : "-";
           AddEvent("SHIELDDESTROYED", $this->UniqueID());
@@ -270,12 +285,16 @@ class Ally {
     if($damageDealt != NULL) $damageDealt = $amount;
     $this->AddDamage($amount);
     AddEvent("DAMAGE", $this->UniqueID() . "!" . $amount);
+
+    CheckBobaFettJTL($this->PlayerID(), $enemyDamage, $fromCombat);
+
     if($this->Health() <= 0 && ($this->CardID() != "d1a7b76ae7" || $this->LostAbilities())//Chirrut Imwe
         && (!AllyIsMultiAttacker($this->CardID()) || !IsMultiTargetAttackActive())) {
       DestroyAlly($this->playerID, $this->index, fromCombat:$fromCombat);
       return true;
     }
-    AllyDamageTakenAbilities($this->playerID, $this->index, damage:$amount, fromCombat:$fromCombat, enemyDamage:$enemyDamage, fromUnitEffect:$fromUnitEffect);
+    AllyDamageTakenAbilities($this->playerID, $this->index, damage:$amount, fromCombat:$fromCombat,
+      enemyDamage:$enemyDamage, fromUnitEffect:$fromUnitEffect, indirectDamage:$indirectDamage);
     switch($this->CardID())
     {
       case "4843225228"://Phase-III Dark Trooper
@@ -319,7 +338,7 @@ class Ally {
     $power = ((int) (AttackValue($this->CardID() ?? 0))) + ((int) $this->allies[$this->index+7]);
     $power += AttackModifier($this->CardID(), $this->playerID, $this->index);
     $upgrades = $this->GetUpgrades();
-
+    $otherPlayer = $this->playerID == 1 ? 2 : 1;
     // Grit buff
     if(HasGrit($this->CardID(), $this->playerID, $this->index)) {
       $damage = $this->Damage();
@@ -338,15 +357,30 @@ class Ally {
         case "3292172753"://Squad Support
           $power += SearchCount(SearchAlliesUniqueIDForTrait($this->Controller(), "Trooper"));
           break;
+        //Jump to Lightspeed
+        case "1463418669"://IG-88
+          //workaround for some reason it doesn't like that the pilot has 0 power
+          $power -= 4;
+          //end workaround
+          $power += SearchCount(SearchAllies($otherPlayer, damagedOnly:true)) > 0 ? 3 : 0;
+          break;
+        case "6610553087"://Nien Nunb
+          $power += CountPilotUnitsAndPilotUpgrades($this->PlayerID(), other: true);
+          break;
+        case "81a416eb1f":
+          $power += TraitContains($this->CardID(), "Transport") ? 1 : 0;
         default:
           break;
       }
     }
 
-    //Other ally buffs
-    $otherAllies = &GetAllies($this->playerID);
-    for($i=0; $i<count($otherAllies); $i+=AllyPieces()) {
-      switch($otherAllies[$i]) {
+    // Friendly ally buffs
+    $allies = &GetAllies($this->playerID);
+    for ($i = 0; $i < count($allies); $i += AllyPieces()) {
+      $ally = new Ally("MYALLY-" . $i, $this->playerID);
+      if ($ally->LostAbilities()) continue;
+
+      switch($allies[$i]) {
         case "6097248635"://4-LOM
           if(CardTitle($this->CardID()) == "Zuckuss") $power += 1;
           break;
@@ -390,10 +424,14 @@ class Ally {
         default: break;
       }
     }
-    //Their ally modifiers
-    $theirAllies = &GetAllies($this->playerID == 1 ? 2 : 1);
-    for($i=0; $i<count($theirAllies); $i+=AllyPieces()) {
-      switch($theirAllies[$i]) {
+
+    // Enemy ally buffs
+    $theirAllies = &GetAllies($otherPlayer);
+    for ($i = 0; $i < count($theirAllies); $i += AllyPieces()) {
+      $ally = new Ally("MYALLY-" . $i, $otherPlayer);
+      if ($ally->LostAbilities()) continue;
+
+      switch ($theirAllies[$i]) {
         case "3731235174"://Supreme Leader Snoke
           if (!$this->IsLeader()) {
             $power -= 2;
@@ -402,27 +440,36 @@ class Ally {
         default: break;
       }
     }
-    //Character buffs
+
+    // Leader buffs
     $myChar = &GetPlayerCharacter($this->playerID);
     for($i=0; $i<count($myChar); $i+=CharacterPieces()) {
+      if (LeaderAbilitiesIgnored()) continue;
+
       switch($myChar[$i]) {
         case "8560666697"://Director Krennic Leader
-          if($this->IsDamaged() && !LeaderAbilitiesIgnored()) $power += 1;
+          if ($this->IsDamaged()) $power += 1;
           break;
         case "9794215464"://Gar Saxon Leader
-          if($this->IsUpgraded() && !LeaderAbilitiesIgnored()) $power += 1;
+          if ($this->IsUpgraded()) $power += 1;
           break;
         default: break;
       }
     }
-    //Current effect buffs
-    for($i=0; $i<count($currentTurnEffects); $i+=CurrentTurnEffectPieces()) {
-      if($currentTurnEffects[$i+1] != $this->playerID) continue;
-      if($currentTurnEffects[$i+2] != -1 && $currentTurnEffects[$i+2] != $this->UniqueID()) continue;
-      $power += EffectAttackModifier($currentTurnEffects[$i], $this->PlayerID());
+
+    // Current effect buffs
+    for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
+      $effectCardID = $currentTurnEffects[$i];
+      $effectPlayerID = $currentTurnEffects[$i + 1];
+      $effectUniqueID = $currentTurnEffects[$i + 2];
+
+      if ($effectPlayerID != $this->PlayerID()) continue;
+      if ($effectUniqueID != -1 && $effectUniqueID != $this->UniqueID()) continue;
+
+      $power += EffectAttackModifier($effectCardID, $this->PlayerID());
     }
-    if($power < 0) $power = 0;
-    return $power;
+
+    return max($power, 0);
   }
 
   //All the things that should happen at the end of a round
@@ -455,20 +502,28 @@ class Ally {
   }
 
   function AddSubcard($cardID, $ownerID = null, $asPilot = false) {
+    $subCardUniqueID = GetUniqueId();
     $ownerID = $ownerID ?? $this->playerID;
-    if($this->allies[$this->index+4] == "-") $this->allies[$this->index+4] = $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0");
-    else $this->allies[$this->index+4] = $this->allies[$this->index+4] . "," . $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0");
+    if($this->allies[$this->index+4] == "-") $this->allies[$this->index+4] = $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID;
+    else $this->allies[$this->index+4] = $this->allies[$this->index+4] . "," . $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID;
+
+    if($asPilot) {
+      AllyPlayedAsUpgradeAbility($cardID, $ownerID, $this);
+    }
+    return $subCardUniqueID;
   }
 
-  function RemoveSubcard($subcardID) {
+  function RemoveSubcard($subcardID, $subcardUniqueID = "") {
     if($this->index == -1) return false;
     $subcards = $this->GetSubcards();
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
-      if($subcards[$i] == $subcardID) {
+      if($subcards[$i] == $subcardID && ($subcardUniqueID == "" || $subcards[$i+3] == $subcardUniqueID)) {
         $ownerId = $subcards[$i+1];
-        unset($subcards[$i+2]);
-        unset($subcards[$i+1]);
-        unset($subcards[$i]);
+
+        for ($j = SubcardPieces() - 1; $j >= 0; $j--) {
+          unset($subcards[$i+$j]);
+        }
+
         $subcards = array_values($subcards);
         $this->allies[$this->index + 4] = count($subcards) > 0 ? implode(",", $subcards) : "-";
         if(DefinedTypesContains($subcardID, "Upgrade")) UpgradeDetached($subcardID, $this->playerID, "MYALLY-" . $this->index);
@@ -489,10 +544,25 @@ class Ally {
   }
 
   function Attach($cardID, $ownerID = null) {
-    $this->AddSubcard($cardID, $ownerID, asPilot: $this->ReceivingPilot($cardID));
+    $receivingPilot = $this->ReceivingPilot($cardID);
+    $subcardUniqueID = $this->AddSubcard($cardID, $ownerID, asPilot: $receivingPilot);
     if (CardIsUnique($cardID)) {
       $this->CheckUniqueUpgrade($cardID);
+      if($receivingPilot) {
+        $this->CheckUniqueAllyForPilot($cardID);
+      }
     }
+    //Pilot attach side effects
+    if($receivingPilot) {
+      switch($this->CardID()) {
+        //Jump to Lightspeed
+        case "3711891756"://Red Leader
+          CreateXWing($this->Controller());
+        default: break;
+      }
+    }
+    //end Pilot attach side effects
+    return $subcardUniqueID;
   }
 
   function GetSubcards() {
@@ -506,14 +576,19 @@ class Ally {
     $subcards = $this->GetSubcards();
     $upgrades = [];
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
+      $isPilot = $subcards[$i+2] == "1";
       if(
         DefinedTypesContains($subcards[$i], "Upgrade", $this->PlayerID())
         || DefinedTypesContains($subcards[$i], "Token Upgrade", $this->PlayerID())
-        || (DefinedTypesContains($subcards[$i], "Unit", $this->PlayerID()) && $subcards[$i+2] == "1")
-      )
-      {
-        if($withMetadata) array_push($upgrades, $subcards[$i], $subcards[$i+1], $subcards[$i+2]);
-        else $upgrades[] = $subcards[$i];
+        || (DefinedTypesContains($subcards[$i], "Unit", $this->PlayerID()) && $isPilot)
+      ) {
+        if ($withMetadata) {
+          for ($j = 0; $j < SubcardPieces(); $j++) {
+            array_push($upgrades, $subcards[$i + $j]);
+          }
+        } else {
+          $upgrades[] = $subcards[$i];
+        }
       }
     }
     return $upgrades;
@@ -524,9 +599,15 @@ class Ally {
     $subcards = $this->GetSubcards();
     $capturedUnits = [];
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
-      if(DefinedTypesContains($subcards[$i], "Unit", $this->PlayerID()) && $subcards[$i+1] != $this->PlayerID() && $subcards[$i+2] != "1") {
-        if($withMetadata) array_push($capturedUnits, $subcards[$i], $subcards[$i+1], $subcards[$i+2]);
-        else $capturedUnits[] = $subcards[$i];
+      $isPilot = $subcards[$i+2] == "1";
+      if(DefinedTypesContains($subcards[$i], "Unit") && !$isPilot) {
+        if ($withMetadata) {
+          for ($j = 0; $j < SubcardPieces(); $j++) {
+            array_push($capturedUnits, $subcards[$i + $j]);
+          }
+        } else {
+          $capturedUnits[] = $subcards[$i];
+        }
       }
     }
     return $capturedUnits;
@@ -566,6 +647,18 @@ class Ally {
     }
   }
 
+  function CheckUniqueAllyForPilot($attachedPilotCardID) {
+    if(!CardIsUnique($attachedPilotCardID)) return;
+    for($i=0; $i<count($this->allies); $i+=AllyPieces()) {
+      if($i == $this->index) continue;
+      $ally = new Ally("MYALLY-" . $i);
+      if($ally->CardID() == $attachedPilotCardID) {
+        WriteLog(CardLink($attachedPilotCardID, $attachedPilotCardID) . " unit was defeated due to unique rule.");
+        $ally->Destroy();
+      }
+    }
+  }
+
   function HasUpgrade($upgradeID) {
     if($this->index == -1) return false;
     $subcards = $this->GetSubcards();
@@ -577,9 +670,13 @@ class Ally {
     return false;
   }
 
-  function DefeatUpgrade($upgradeID) {
+  function DefeatUpgrade($upgradeID, $subcardUniqueID = "") {
+    if($upgradeID == "11e54776e9") {//Luke Skywalker leader pilot
+      WriteLog(CardLink($upgradeID, $upgradeID) . " cannot be defeated.");
+      return;
+    }
     $uniqueID = $this->UniqueID();
-    $ownerId = $this->RemoveSubcard($upgradeID);
+    $ownerId = $this->RemoveSubcard($upgradeID, $subcardUniqueID);
     $updatedAlly = new Ally($uniqueID); // Refresh the ally, as the index or controller may have changed
     $updatedAlly->DefeatIfNoRemainingHP();
     return $ownerId;
@@ -606,31 +703,50 @@ class Ally {
     return $this->allies[$this->index + 8];
   }
 
-  function ModifyUses($amount): void {
+  function SetNumUses($numUses) {
+    $this->allies[$this->index + 8] = $numUses;
+  }
+
+  function SumNumUses($amount): void {
     $this->allies[$this->index + 8] += $amount;
   }
 
   function LostAbilities($ignoreFirstCardId = ""): bool {
     global $currentTurnEffects;
-    for($i=0; $i<count($currentTurnEffects); $i+=CurrentTurnEffectPieces()) {
-      if($currentTurnEffects[$i+1] != $this->PlayerID()) continue;
-      if($currentTurnEffects[$i+2] != -1 && $currentTurnEffects[$i+2] != $this->UniqueID()) continue;
-      if($currentTurnEffects[$i] == "2639435822") return true;
+
+    // Check for effects that prevent abilities
+    for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {
+      $effectCardID = $currentTurnEffects[$i];
+      $effectPlayerID = $currentTurnEffects[$i + 1];
+      $effectUniqueID = $currentTurnEffects[$i + 2];
+
+      if ($effectPlayerID != $this->PlayerID()) continue;
+      if ($effectUniqueID != -1 && $effectUniqueID != $this->UniqueID()) continue;
+
+      switch ($effectCardID) {
+        case "2639435822": //Force Lightning
+          return true;
+        default: break;
+      }
     }
+
+    // Check for upgrades that prevent abilities
     $upgrades = $this->GetUpgrades();
     $ignoredUpgrade = 0;
-    for($i=0; $i<count($upgrades); ++$i) {
+    for ($i = 0; $i < count($upgrades); $i++) {
       //in case of imprisoned, upgrade are added before all triggers, we need to ignore it for krayt
       if($ignoreFirstCardId != "" && $upgrades[$i] == $ignoreFirstCardId && $ignoredUpgrade == 0) {
         $ignoredUpgrade++;
         continue;
       }
-      switch($upgrades[$i]) {
+
+      switch ($upgrades[$i]) {
         case "1368144544"://Imprisoned
           return true;
         default: break;
       }
     }
+
     if ($this->IsLeader() && LeaderAbilitiesIgnored()) {
       return true;
     }
@@ -646,7 +762,7 @@ class Ally {
   function HasPilotLeaderUpgrade() {
     $upgrades = $this->GetUpgrades(withMetadata:true);
     for($i=0; $i<count($upgrades); $i+=SubcardPieces()) {
-      if(CardIDIsLeader($upgrades[$i]) && $upgrades[$i+2] == "1") return true;//TODO: test attached unit can't be Vanquished
+      if(CardIDIsLeader($upgrades[$i]) && $upgrades[$i+2] == "1") return true;
     }
     return false;
   }
