@@ -200,8 +200,9 @@ class Ally {
   function ReceivingPilot($cardID, $player = "") {
     global $CS_PlayedAsUpgrade;
     if($player == "") $player = $this->PlayerID();
+    $isLeaderPilot = CardIDIsLeader($cardID) && LeaderCanPilot(LeaderUndeployed($cardID));
 
-    return PilotingCost($cardID) >= 0 && GetClassState($player, $CS_PlayedAsUpgrade) == "1";
+    return $isLeaderPilot || PilotingCost($cardID) >= 0 && GetClassState($player, $CS_PlayedAsUpgrade) == "1";
   }
 
   function IsExhausted() {
@@ -421,6 +422,9 @@ class Ally {
         case "7924172103"://Bariss Offee
           if($this->WasHealed()) $power += 1;
           break;
+        case "9811031405"://Victor Leader
+          if($i != $this->index && CardArenas($this->CardID()) == "Space") $power += 1;
+          break;
         default: break;
       }
     }
@@ -572,7 +576,7 @@ class Ally {
   }
 
   function GetUpgrades($withMetadata = false) {
-    if($this->allies[$this->index + 4] == "-") return [];
+    if(!$this->Exists() || $this->allies[$this->index + 4] == "-") return [];
     $subcards = $this->GetSubcards();
     $upgrades = [];
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
@@ -686,8 +690,9 @@ class Ally {
     $ownerId = $this->RemoveSubcard($captiveID);
     if($ownerId != -1) {
       if($newController == -1) $newController = $ownerId;
-      PlayAlly($captiveID, $newController, from:"CAPTIVE", owner:$ownerId);
+      return PlayAlly($captiveID, $newController, from:"CAPTIVE", owner:$ownerId);
     }
+    return -1;
   }
 
   function DiscardCaptive($captiveID) {
@@ -713,6 +718,8 @@ class Ally {
 
   function LostAbilities($ignoreFirstCardId = ""): bool {
     global $currentTurnEffects;
+
+    if (!$this->Exists()) return false;
 
     // Check for effects that prevent abilities
     for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnEffectPieces()) {

@@ -61,8 +61,7 @@ function DefeatUpgrade($player, $may = false, $search="MYALLY:hasUpgradeOnly=tru
   else if($to == "HAND") AddDecisionQueue("OP", $player, "BOUNCEUPGRADE", 1);
 }
 
-function PlayCaptive($player, $target="")
-{
+function PlayCaptive($player, $target) {
   AddDecisionQueue("PASSPARAMETER", $player, $target);
   AddDecisionQueue("SETDQVAR", $player, 0);
   AddDecisionQueue("MZOP", $player, "GETCAPTIVES");
@@ -209,7 +208,7 @@ function RemoveCurrentTurnEffect($index)
 
 function CurrentTurnEffectPieces()
 {
-  return 4;
+  return CurrentTurnPieces();
 }
 
 function CurrentTurnEffectUses($cardID)
@@ -628,7 +627,7 @@ function ProcessTrigger($player, $parameter, $uniqueID, $additionalCosts, $targe
   switch ($parameter) {
     case "AMBUSH":
       $ally = new Ally($uniqueID);
-      if (SearchCount(GetTargetsForAttack($ally, false)) > 0) {
+      if (SearchCount(GetTargetsForAttack($ally, false)) > 0 && $ally->Exists() && $ally->Controller() == $player) {
         AddDecisionQueue("YESNO", $player, "if_you_want_to_resolve_the_ambush_attack");
         AddDecisionQueue("NOPASS", $player, "-");
         AddDecisionQueue("PASSPARAMETER", $player, 1, 1);
@@ -1170,6 +1169,7 @@ function CountPilotUnitsAndPilotUpgrades($player, $other=false) {
   $count = $other ? -1 : 0;
   $count += SearchCount(SearchAllies($player, trait:"Pilot"));
   $alliesWithUpgrades = explode(",", SearchAllies($player, hasUpgradeOnly:true));
+  if($alliesWithUpgrades[0] == "") return $count;
   for($i=0; $i<count($alliesWithUpgrades); ++$i) {
     $ally = new Ally("MYALLY-" . $alliesWithUpgrades[$i], $player);
     $upgrades = $ally->GetUpgrades();

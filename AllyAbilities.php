@@ -101,8 +101,10 @@ function CheckHealthAllAllies() {
   }
 }
 
-function CheckUniqueAlly($uniqueID) {
+// Returns true if there is more than one unique unit in play, false otherwise.
+function CheckUniqueAlly($uniqueID, $reportMode = false) {
   $ally = new Ally($uniqueID);
+  if (!$ally->Exists()) return;
   $cardID = $ally->CardID();
   $player = $ally->PlayerID();
 
@@ -112,28 +114,37 @@ function CheckUniqueAlly($uniqueID) {
     $uniqueAllyInPlay = false;
     for ($i = 0; $i < count($allies); $i += AllyPieces()) {
       $otherAlly = new Ally("MYALLY-" . $i, $player);
-      if ($otherAlly->UniqueID() != $uniqueID) {
-        if($otherAlly->CardID() == $cardID && !$otherAlly->IsCloned()) $uniqueAllyInPlay = true;
-        else {//check for pilots
+      if ($otherAlly->Exists() && $otherAlly->UniqueID() != $uniqueID) {
+        if($otherAlly->CardID() == $cardID && !$otherAlly->IsCloned()) {
+          $uniqueAllyInPlay = true;
+          break;
+        } else {//check for pilots
           $upgrades = $otherAlly->GetUpgrades(withMetadata:true);
           for ($j = 0; $j < count($upgrades); $j+=SubcardPieces()) {
             if ($upgrades[$j] == $cardID) {
-              WriteLog(CardLink($cardID, $cardID) . " upgrade has been defeated due to unique rule.");
-              DefeatUpgradeForUniqueID($upgrades[$j + 3]);
-              return;
+              if (!$reportMode) {
+                WriteLog(CardLink($cardID, $cardID) . " upgrade has been defeated due to unique rule.");
+                DefeatUpgradeForUniqueID($upgrades[$j + 3]);
+              }
+              return true;
             }
           }
         }
-        break;
       }
     }
 
-    if ($uniqueAllyInPlay) {
+    if (!$reportMode && $uniqueAllyInPlay) {
       PrependDecisionQueue("MZDESTROY", $player, "-", 1);
       PrependDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
-      PrependDecisionQueue("SETDQCONTEXT", $player, "You have two of this unique unit; choose one to destroy");
-      PrependDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:cardID=" . $cardID);
+      PrependDecisionQueue("SETDQCONTEXT", $player, "You have two of this unique unit; choose one to destroy", 1);
+      PrependDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:cardID=" . $cardID, 1);
+      PrependDecisionQueue("NOPASS", $player, "-");
+      // Double check that there is more than one unique unit in play, in case any were defeated during the resolution.
+      PrependDecisionQueue("MZOP", $player, "CHECKUNIQUEALLY");
+      PrependDecisionQueue("PASSPARAMETER", $player, $uniqueID);
     }
+
+    return $uniqueAllyInPlay;
   }
 }
 
@@ -201,6 +212,7 @@ function AllyHasStaticHealthModifier($cardID)
     case "0268657344"://Admiral Yularen
     case "4718895864"://Padawan Starfighter
     case "9017877021"://Clone Commander Cody
+    case "9811031405"://Victor Leader
       return true;
     default: return false;
   }
@@ -274,6 +286,9 @@ function AllyStaticHealthModifier($cardID, $index, $player, $myCardID, $myIndex,
       break;
     case "9017877021"://Clone Commander Cody
       if($index != $myIndex && $player == $myPlayer && IsCoordinateActive($player)) return 1;
+      break;
+    case "9811031405"://Victor Leader
+      if($index != $myIndex && $player == $myPlayer && CardArenas($cardID) == "Space") return 1;
       break;
     default: break;
   }
@@ -431,8 +446,10 @@ function DestroyAlly($player, $index, $skipDestroy = false, $fromCombat = false,
     }
   }
 
-  // Rescue captives
+  // Remove the ally from the allies array
   for($j = $index + AllyPieces() - 1; $j >= $index; --$j) unset($allies[$j]);
+
+  // Rescue captives
   $allies = array_values($allies);
   if(!$skipRescue) {
     for($i=0; $i<count($captives); $i+=SubcardPieces()) {
@@ -490,21 +507,48 @@ function UpgradesContainBounty($upgrades) {
   return false;
 }
 
-function AllyTakeControl($player, $index) {
+function AllyTakeControl($player, $uniqueID) {
   global $currentTurnEffects;
-  if($index == "") return -1;
+  if ($uniqueID == "" || $uniqueID == -1) return -1;
+  
   $otherPlayer = $player == 1 ? 2 : 1;
+  $ally = new Ally($uniqueID, $otherPlayer);
+  if (!$ally->Exists()) return -1;
+  $allyIndex = $ally->Index();
+  $allyController = $ally->Controller();
+
+  // Return if the ally is already controlled by the player
+  if ($allyController == $player) {
+    return $uniqueID;
+  }
+
   $myAllies = &GetAllies($player);
   $theirAllies = &GetAllies($otherPlayer);
-  $uniqueID = $theirAllies[$index+5];
+
+  // Swap current turn effects
   for($i=0; $i<count($currentTurnEffects); $i+=CurrentTurnEffectPieces()) {
     if($currentTurnEffects[$i+2] == -1 || $currentTurnEffects[$i+2] != $uniqueID) continue;
+    $effectCardID = explode("_", $currentTurnEffects[$i])[0];
+
+    // Skip the swap for specific cards
+    $skipSwap = false;
+    switch($effectCardID) {
+      case "3503494534"://Regional Governor
+      case "7964782056"://Qi'Ra unit
+        $skipSwap = true;
+        break;
+      default: break;
+    }
+
+    if ($skipSwap) continue;
     $currentTurnEffects[$i+1] = $currentTurnEffects[$i+1] == 1 ? 2 : 1; // Swap players
   }
-  for($i=$index; $i<$index+AllyPieces(); ++$i) {
+
+  // Swap ally
+  for ($i = $allyIndex; $i < $allyIndex + AllyPieces(); $i++) {
     $myAllies[] = $theirAllies[$i];
   }
-  for ($i=$index+AllyPieces()-1; $i>=$index; $i--) {
+  for ($i= $allyIndex + AllyPieces() - 1; $i >= $allyIndex; $i--) {
     unset($theirAllies[$i]);
   }
   $theirAllies = array_values($theirAllies); // Reindex the array
@@ -880,6 +924,17 @@ function AllyDestroyedAbility($player, $cardID, $uniqueID, $lostAbilities, $isUp
       case "1519837763"://Shuttle ST-149
         ShuttleST149($player);
         break;
+      case "1397553238"://Desperate Commando
+        $otherPlayer = $player == 1 ? 2 : 1;
+        AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY");
+        AddDecisionQueue("SETDQCONTEXT", $player, "Choose a card to give -1/-1", 1);
+        AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+        AddDecisionQueue("SETDQVAR", $player, 0, 1);
+        AddDecisionQueue("MZOP", $player, "GETUNIQUEID", 1);
+        AddDecisionQueue("ADDLIMITEDCURRENTEFFECT", $player, "1397553238,PLAY", 1);
+        AddDecisionQueue("PASSPARAMETER", $player, "{0}", 1);
+        AddDecisionQueue("MZOP", $player, "REDUCEHEALTH,1", 1); 
+        break;
       //AllyDestroyedAbility End
       default: break;
     }
@@ -1191,6 +1246,13 @@ function AllyPlayedAsUpgradeAbility($cardID, $player, $targetAlly) {
         AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
         AddDecisionQueue("MZOP", $player, "READY", 1);
       }
+      break;
+    case "6720065735"://Han Solo (Has His Moments)
+      AddDecisionQueue("YESNO", $player, "Do you want to attack with " . CardLink($targetAlly->CardID(), $targetAlly->CardID()) . "?");
+      AddDecisionQueue("NOPASS", $player, "-");
+      AddDecisionQueue("PASSPARAMETER", $player, $targetAlly->MZIndex(), 1);
+      AddDecisionQueue("ADDCURRENTEFFECT", $player, "6720065735", 1);
+      AddDecisionQueue("MZOP", $player, "ATTACK", 1);
       break;
     default: break;
   }
@@ -1752,6 +1814,10 @@ function SpecificAllyAttackAbilities($attackID)
           AddDecisionQueue("MAYCHOOSEMULTIZONE", $mainPlayer, "<-", 1);
           AddDecisionQueue("MZOP", $mainPlayer, "DEALDAMAGE,3,$mainPlayer,1", 1);
         }
+        break;
+      case "1039444094"://Paige Tico pilot
+        $attackerAlly->Attach("2007868442");//Experience token
+        $attackerAlly->DealDamage(1, enemyDamage:false, fromUnitEffect:true);
         break;
       default: break;
     }

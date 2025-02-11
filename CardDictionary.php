@@ -415,6 +415,8 @@ function HasSentinel($cardID, $player, $index)
       return true;
     case "0ee1e18cf4"://Obi-wan Kenobi
       return true;
+    case "6854247423"://Tantive IV
+      return true;
     default: return false;
   }
 }
@@ -652,6 +654,7 @@ function HasAmbush($cardID, $player, $index, $from)
   }
   switch($cardID)
   {
+    //Spark of Rebellion
     case "5346983501"://Syndicate Lackeys
     case "6718924441"://Mercenary Company
     case "7285270931"://Auzituck Liberator Gunship
@@ -663,6 +666,7 @@ function HasAmbush($cardID, $player, $index, $from)
     case "3684950815"://Bounty Hunter Crew
     case "9500514827"://Han Solo (Reluctant Hero)
     case "8506660490"://Darth Vader (Commanding the First Legion)
+    //Shadows of the Galaxy
     case "1805986989"://Modded Cohort
     case "7171636330"://Chain Code Collector
     case "7982524453"://Fennec Shand
@@ -673,25 +677,26 @@ function HasAmbush($cardID, $player, $index, $from)
     case "6097248635"://4-LOM
     case "9483244696"://Weequay Pirate Gang
     case "1086021299"://Arquitens Assault Cruiser
+    //Twilight of the Republic
+    case "7953154930"://Hidden Sharpshooter
+    case "1988887369"://Phase II Clone Trooper
+    case "4824842849"://Subjugating Starfighter
+    case "2554988743"://Gor
+    case "7494987248"://Plo Koon
+    //Jump to Lightspeed
     case "2388374331"://Blue Leader
     case "1356826899"://Home One
+    case "6720065735"://Han Solo (Has His Moments)
       return true;
+
+    //conditional ambush
     case "2027289177"://Escort Skiff
       return SearchCount(SearchAllies($player, aspect:"Command")) > 1;
     case "4685993945"://Frontier AT-RT
       return SearchCount(SearchAllies($player, trait:"Vehicle")) > 1;
+
     case "5752414373"://Millennium Falcon
       return $from == "HAND";
-    case "7953154930"://Hidden Sharpshooter
-      return true;
-    case "1988887369"://Phase II Clone Trooper
-      return true;
-    case "4824842849"://Subjugating Starfighter
-      return true;
-    case "2554988743"://Gor
-      return true;
-    case "7494987248"://Plo Koon
-      return true;
     case "7380773849"://Coruscant Guard
       return IsCoordinateActive($player);
     case "6999668340"://Droid Commando
@@ -759,14 +764,19 @@ function HasSaboteur($cardID, $player, $index)
       case "4910017138": return true;//Breaking In
       case "5610901450": return true;//Heroes on Both Sides
       //Jump to Lightspeed
-      case "8656409691": return true;//Rio Durant
+      case "8656409691": return true;//Rio Durant leader
       default: break;
     }
   }
   $upgrades = $ally->GetUpgrades();
   for($i=0; $i<count($upgrades); ++$i)
   {
-    if($upgrades[$i] == "0797226725") return true;//Infiltrator's Skill
+    switch($upgrades[$i]) {
+      case "0797226725"://Infiltrator's Skill
+      case "81a416eb1f"://Rio Durant pilot leader
+        return true;
+      default: break;
+    }
   }
   $allies = &GetAllies($player);
   for($i=0; $i<count($allies); $i+=AllyPieces())
@@ -781,6 +791,7 @@ function HasSaboteur($cardID, $player, $index)
   }
   switch($cardID)
   {
+    //Spark of Rebellion
     case "1017822723"://Rogue Operative
     case "9859536518"://Jawa Scavenger
     case "0046930738"://Rebel Pathfinder
@@ -790,6 +801,7 @@ function HasSaboteur($cardID, $player, $index)
     case "0828695133"://Seventh Sister
     case "9250443409"://Lando Calrissian (Responsible Businessman)
     case "3c60596a7a"://Cassian Andor (Dedicated to the Rebellion)
+    //Shadows of the Galaxy
     case "1690726274"://Zuckuss
     case "4595532978"://Ketsu Onyo
     case "3786602643"://House Kast Soldier
@@ -798,6 +810,7 @@ function HasSaboteur($cardID, $player, $index)
     case "2151430798"://Guavian Antagonizer
     case "2556508706"://Resourceful Pursuers
     case "2965702252"://Unlicensed Headhunter
+    //Twilight of the Republic
     case "6404471739"://Senatorial Corvette
     case "4050810437"://Droid Starfighter
     case "3600744650"://Bold Recon Commando
@@ -805,7 +818,11 @@ function HasSaboteur($cardID, $player, $index)
     case "1641175580"://Kit Fisto
     case "8414572243"://Enfys Nest (Champion of Justice)
     case "3434956158"://Fives
+    //Jump to Lightspeed
+    case "81a416eb1f"://Rio Durant leader unit
       return true;
+
+    //conditional saboteur
     case "8187818742"://Republic Commando
       return IsCoordinateActive($player);
     case "11299cc72f"://Pre Viszla
@@ -2099,6 +2116,7 @@ function HasAttackAbility($cardID) {
     case "6931439330"://The Ghost
     case "3468546373"://General Rieekan
     case "7192849828"://Mist Hunter
+    case "3427170256"://Captain Phasma Unit
       return true;
     default: return false;
   }
@@ -2362,7 +2380,7 @@ function PilotingCost($cardID, $player = "") {
     case "5673100759": $minCost = 2; break;//Boshek
     case "6421006753": $minCost = 2; break;//The Mandalorian
     case "6610553087": $minCost = 1; break;//Nien Nunb
-    case "6720065735": $minCost = 2; break;//Han Solo unit
+    case "6720065735": $minCost = 2; break;//Han Solo (Has His Moments)
     case "7208848194": $minCost = 3; break;//Chewbacca
     case "7420426716": $minCost = 1; break;//Dagger Squadron Pilot
     case "7700932371": $minCost = 2; break;//Boba Fett

@@ -420,17 +420,18 @@ function DecisionQueueStaticEffect($phase, $player, $parameter, $lastResult)
           $ally = new Ally($lastResult);
           if ($ally->Exists() && $ally->Controller() != $ally->Owner()) {
             $owner = $ally->Owner();
-            AllyTakeControl($owner, $ally->Index());
+            AllyTakeControl($owner, $ally->UniqueID());
             WriteLog("Reverted control of " . CardLink($ally->CardID(), $ally->CardID()) . "back to player $owner");
           } else {
             return "PASS";
           }
       }
-      return $lastResult;
+      return $lastResult;   
     case "MZOP":
       $parameterArr = explode(",", $parameter);
       switch ($parameterArr[0])
       {
+        case "CHECKUNIQUEALLY": return CheckUniqueAlly($lastResult, reportMode:true) ? "YES" : "NO";
         case "FREEZE": MZFreeze($lastResult); break;
         case "GAINCONTROL": MZGainControl($player, $lastResult); break;
         case "GETCARDID": return GetMZCard($player, $lastResult);
@@ -633,10 +634,7 @@ function DecisionQueueStaticEffect($phase, $player, $parameter, $lastResult)
         //   $zone = &GetMZZone($player, $mzArr[0]);
         //   return MemoryCost($zone[$mzArr[1]], $player);
         case "TAKECONTROL":
-          $mzArr = explode("-", $lastResult);
-          $controller = $mzArr[0] == "MYALLY" ? $player : ($player == 1 ? 2 : 1);
-          $index = $mzArr[1];
-          $uniqueID = AllyTakeControl($player, $index);
+          $uniqueID = AllyTakeControl($player, $lastResult);
           return $uniqueID;
         case "CAPTURE":
           $uniqueID = $parameterArr[1];
@@ -773,7 +771,8 @@ function DecisionQueueStaticEffect($phase, $player, $parameter, $lastResult)
           $mzArr = explode("-", $dqVars[0]);
           $allyPlayer = $mzArr[0] == "MYALLY" ? $player : ($player == 1 ? 2 : 1);
           $ally = new Ally($dqVars[0], $allyPlayer);
-          $ally->RescueCaptive($captiveID, $player);
+          $ally->RemoveSubcard($captiveID);
+          PlayCardSkipCosts($captiveID, "CAPTIVE");
           return $lastResult;
         case "DISCARDCAPTIVE":
           $captiveID = $lastResult;
