@@ -243,6 +243,35 @@ function ModalAbilities($player, $card, $lastResult)
         default: break;
       }
       return $lastResult;
+    case "CORVUS":
+      switch($lastResult) {
+        case 0: // Move Pilot unit to Corvus
+          AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:trait=Pilot");
+          AddDecisionQueue("SETDQCONTEXT", $player, "Choose a Pilot unit to attach");
+          AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+          AddDecisionQueue("MZOP", $player, "GETUNIQUEID", 1);
+          AddDecisionQueue("MZOP", $player, "MOVEPILOTUNIT", 1);
+          break;
+        case 1: // Move Pilot upgrade to Corvus
+          global $dqVars, $CS_PlayedAsUpgrade;
+          $uniqueID = $dqVars[0];
+          AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY:hasPilotOnly=1");
+          AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to move a Pilot from.");
+          AddDecisionQueue("CHOOSEMULTIZONE", $player, "<-", 1);
+          AddDecisionQueue("SETDQVAR", $player, "1", 1);
+          AddDecisionQueue("MZOP", $player, "GETUPGRADES", 1);
+          AddDecisionQueue("FILTER", $player, "LastResult-include-trait-Pilot", 1);
+          AddDecisionQueue("SETDQCONTEXT", $player, "Choose a pilot upgrade to move.", 1);
+          AddDecisionQueue("CHOOSECARD", $player, "<-", 1);
+          AddDecisionQueue("SETDQVAR", $player, "0", 1);
+          AddDecisionQueue("PASSPARAMETER", $player, "1", 1);
+          AddDecisionQueue("SETCLASSSTATE", $player, $CS_PlayedAsUpgrade, 1);
+          AddDecisionQueue("PASSPARAMETER", $player, $uniqueID, 1);
+          AddDecisionQueue("MZOP", $player, "MOVEUPGRADE", 1);
+          break;
+        default: break;
+      }
+      return $lastResult;
     default: return "";
   }
 }
@@ -415,6 +444,24 @@ function SpecificCardLogic($player, $parameter, $lastResult)
         for ($i = count($indices) - 1; $i >= 0; $i--) {
           MZMoveCard($player, "", "MYHAND", mzIndex:"MYDISCARD-" . $indices[$i]);
         }
+      }
+      break;
+    case "YOUREALLCLEARKID":
+      $totalEnemySpaceUnits = SearchCount(SearchAllies($otherPlayer, arena:"Space"));
+      if ($totalEnemySpaceUnits == 0) {
+        AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY");
+        AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to give an experience token");
+        AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+        AddDecisionQueue("MZOP", $player, "ADDEXPERIENCE", 1);
+      }
+      break;
+    case "AHSOKATANOJTL":
+      if (DefinedTypesContains($lastResult, "Unit")) {
+        AddDecisionQueue("MULTIZONEINDICES", $player, "MYALLY&THEIRALLY");
+        AddDecisionQueue("MZFILTER", $player, "status=1");
+        AddDecisionQueue("SETDQCONTEXT", $player, "Choose a unit to exhaust");
+        AddDecisionQueue("MAYCHOOSEMULTIZONE", $player, "<-", 1);
+        AddDecisionQueue("MZOP", $player, "REST", 1);
       }
       break;
     case "UWINGREINFORCEMENT":
@@ -840,12 +887,13 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       AddDecisionQueue("MZOP", $player, "ATTACK");
       break;
     case "THRAWN_JTL":
-      $data = explode(",", $dqVars[1]);
+      $data = explode(";", $dqVars[1]);
       $target = $data[0];
       $leaderUnitSide = $data[1];
       $trigger = $data[2];
       $dd=DeserializeAllyDestroyData($trigger);
-      AllyDestroyedAbility($player, $target, $dd["UniqueID"], $dd["LostAbilities"],$dd["IsUpgraded"],$dd["Upgrades"],$dd["UpgradesWithOwnerData"]);
+      AllyDestroyedAbility($player, $target, $dd["UniqueID"], $dd["LostAbilities"],$dd["IsUpgraded"],$dd["Upgrades"],$dd["UpgradesWithOwnerData"],
+        $dd["LastPower"], $dd["LastRemainingHP"]);
       if($leaderUnitSide == "1") {
         $thrawnLeaderUnit = new Ally("MYALLY-" . SearchAlliesForCard($player, "53207e4131"));
         if($thrawnLeaderUnit->Exists()) {
@@ -872,6 +920,10 @@ function SpecificCardLogic($player, $parameter, $lastResult)
       $damage = $dqVars[1];
       $otherPlayer = $player == 1 ? 2 : 1;
       DamagePlayerAllies($otherPlayer, $damage, "8174214418", arena:$arena);
+      break;
+    case "SABINES_MP_CUNNING":
+      if($lastResult == "Exhaust_Theirs") ExhaustResource($otherPlayer, 1);
+      else if ($lastResult == "Ready_Mine") ReadyResource($player, 1);
       break;
     //SpecificCardLogic End
     default: return "";

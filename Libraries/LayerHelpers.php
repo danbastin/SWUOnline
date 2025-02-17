@@ -26,7 +26,13 @@ function LayerDestroyTriggers($player, $cardID, $uniqueID,
   if($serializedDestroyData!=="") $dataBuilder = $dataBuilder . "ALLYDESTROY=$serializedDestroyData" . LAYER_PIECE_SEPARATOR;
   if($serializedResourceData!=="") $dataBuilder = $dataBuilder . "ALLYRESOURCE=$serializedResourceData" . LAYER_PIECE_SEPARATOR;
   if($serializedBountyData!=="") $dataBuilder = $dataBuilder . "ALLYBOUNTIES=$serializedBountyData" . LAYER_PIECE_SEPARATOR;
-  AddLayer("TRIGGER", $player, "AFTERDESTROYABILITY", $cardID, $dataBuilder, $uniqueID);
+  if($cardID == "0474909987") {//Val
+    $valSplitLayers = explode(LAYER_PIECE_SEPARATOR, $dataBuilder);
+    AddLayer("TRIGGER", $player, "AFTERDESTROYABILITY", $cardID, $valSplitLayers[1], $uniqueID);
+    AddLayer("TRIGGER", $player, "AFTERDESTROYABILITY", $cardID, $valSplitLayers[0], $uniqueID);
+  }
+  else
+    AddLayer("TRIGGER", $player, "AFTERDESTROYABILITY", $cardID, $dataBuilder, $uniqueID);
 }
 
 function LayerTheirsDestroyedTriggers($player, $arr) {
@@ -111,12 +117,14 @@ function GetAllyWhenDestroyFriendlyEffects($player, $destroyedCardID, $destroyed
 }
 
 
-function SerializeAllyDestroyData($uniqueID, $lostAbilities, $isUpgraded, $upgrades, $upgradesWithOwnerData) {
+function SerializeAllyDestroyData($uniqueID, $lostAbilities, $isUpgraded, $upgrades, $upgradesWithOwnerData,
+  $lastPower, $lastRemainingHP)
+{
     $upgradesSerialized = implode(",",$upgrades);
     foreach($upgradesWithOwnerData as $key => $value) if(!($key&1)) unset($upgradesWithOwnerData[$key]);
     $upgradeOwnersSerialized = implode(",", $upgradesWithOwnerData);
 
-    return implode(LAYER_DATA_SEPARATOR,[$uniqueID, $lostAbilities, $isUpgraded, $upgradesSerialized, $upgradeOwnersSerialized]);
+    return implode(LAYER_DATA_SEPARATOR,[$uniqueID, $lostAbilities, $isUpgraded, $upgradesSerialized, $upgradeOwnersSerialized, $lastPower, $lastRemainingHP]);
 }
 
 function DeserializeAllyDestroyData($data) {
@@ -131,6 +139,8 @@ function DeserializeAllyDestroyData($data) {
         $upgradesWithOwnerData[2*$i]=$upgrades[$i];
         $upgradesWithOwnerData[2*$i+1]=$upgradeOwners[$i];
     }
+    $lastPower=$arr[5];
+    $lastRemainingHP=$arr[6];
 
     return [
         "UniqueID" => $uniqueID,
@@ -138,6 +148,8 @@ function DeserializeAllyDestroyData($data) {
         "IsUpgraded" => $isUpgraded,
         "Upgrades" => $upgrades,
         "UpgradesWithOwnerData" => $upgradesWithOwnerData,
+        "LastPower" => $lastPower,
+        "LastRemainingHP" => $lastRemainingHP,
     ];
 }
 

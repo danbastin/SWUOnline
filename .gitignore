@@ -1,3 +1,4 @@
+BugReports
 Games
 HostFiles
 .DS_Store
@@ -12,3 +13,5 @@ vendor/
 .phpunit.result.cache
 
 .htaccess
+Utils/LeaderImages/
+Utils/jpg/

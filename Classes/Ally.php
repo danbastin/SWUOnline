@@ -114,15 +114,17 @@ class Ally {
     // Upgrades buffs
     for($i=0; $i<count($upgrades); ++$i) {
       if ($upgrades[$i] != "-") {
-        $upgradeHP = CardUpgradeHPDictionary($upgrades[$i]);
-        if($upgradeHP != -1) $max += $upgradeHP;
-        else $max += CardHP($upgrades[$i]);
+        $max += CardUpgradeHPDictionary($upgrades[$i]);
       }
 
       switch ($upgrades[$i]) {
         case "3292172753"://Squad Support
           $max += SearchCount(SearchAlliesUniqueIDForTrait($this->Controller(), "Trooper"));
           break;
+        case "2633842896"://Biggs Darklighter
+          $max += TraitContains($this->CardID(), "Transport", $this->Controller()) ? 1 : 0;
+          break;
+
         default:
           break;
       }
@@ -200,9 +202,14 @@ class Ally {
   function ReceivingPilot($cardID, $player = "") {
     global $CS_PlayedAsUpgrade;
     if($player == "") $player = $this->PlayerID();
-    $isLeaderPilot = CardIDIsLeader($cardID) && LeaderCanPilot(LeaderUndeployed($cardID));
+    $isLeaderPilot = $cardID == "3eb545eb4b" //Poe Dameron JTL leader
+      || (CardIDIsLeader($cardID) && LeaderCanPilot(LeaderUndeployed($cardID)));
 
     return $isLeaderPilot || PilotingCost($cardID) >= 0 && GetClassState($player, $CS_PlayedAsUpgrade) == "1";
+  }
+
+  function FromEpicAction() {
+    return $this->allies[$this->index+16] == 1;
   }
 
   function IsExhausted() {
@@ -224,13 +231,13 @@ class Ally {
 
   //Returns true if the ally is destroyed
   function DealDamage($amount, $bypassShield = false, $fromCombat = false, &$damageDealt = NULL,
-      $enemyDamage = false, $fromUnitEffect=false, $preventable=true, $indirectDamage=false)
+      $enemyDamage = false, $fromUnitEffect=false, $preventable=true)
   {
     global $currentTurnEffects;
     if($this->index == -1 || $amount <= 0) return false;
     if(!$preventable) $bypassShield = true;
     global $mainPlayer;
-    if(!$fromCombat && $this->AvoidsDamage($enemyDamage)) return;
+    if(!$fromCombat && $preventable && $this->AvoidsDamage($enemyDamage)) return;
     if($fromCombat && !$this->LostAbilities()) {
       if($this->CardID() == "6190335038" && $this->PlayerID() == $mainPlayer && IsCoordinateActive($this->PlayerID())) return false;//Aayla Secura
     }
@@ -294,8 +301,7 @@ class Ally {
       DestroyAlly($this->playerID, $this->index, fromCombat:$fromCombat);
       return true;
     }
-    AllyDamageTakenAbilities($this->playerID, $this->index, damage:$amount, fromCombat:$fromCombat,
-      enemyDamage:$enemyDamage, fromUnitEffect:$fromUnitEffect, indirectDamage:$indirectDamage);
+    AllyDamageTakenAbilities($this->playerID, $this->index, $amount, $fromCombat, $enemyDamage, $fromUnitEffect, $preventable);
     switch($this->CardID())
     {
       case "4843225228"://Phase-III Dark Trooper
@@ -349,9 +355,7 @@ class Ally {
     // Upgrades buffs
     for ($i=0; $i<count($upgrades); ++$i) {
       if ($upgrades[$i] != "-") {
-        $upgradePower = CardUpgradePower($upgrades[$i]);
-        if($upgradePower != -1) $power += $upgradePower;
-        else $power += AttackValue($upgrades[$i]);
+        $power += CardUpgradePower($upgrades[$i]);
       }
 
       switch ($upgrades[$i]) {
@@ -360,8 +364,6 @@ class Ally {
           break;
         //Jump to Lightspeed
         case "1463418669"://IG-88
-          //workaround for some reason it doesn't like that the pilot has 0 power
-          $power -= 4;
           //end workaround
           $power += SearchCount(SearchAllies($otherPlayer, damagedOnly:true)) > 0 ? 3 : 0;
           break;
@@ -397,6 +399,7 @@ class Ally {
         case "9799982630"://General Dodonna
           if($i != $this->index && TraitContains($this->CardID(), "Rebel", $this->PlayerID())) $power += 1;
           break;
+        case "3666212779"://Captain Tarkin
         case "4339330745"://Wedge Antilles
           if(TraitContains($this->CardID(), "Vehicle", $this->PlayerID())) $power += 1;
           break;
@@ -439,6 +442,11 @@ class Ally {
         case "3731235174"://Supreme Leader Snoke
           if (!$this->IsLeader()) {
             $power -= 2;
+          }
+          break;
+        case "3567283316"://Radiant VII
+          if (!$this->IsLeader()) {
+            $power -= $this->Damage();
           }
           break;
         default: break;
@@ -505,11 +513,11 @@ class Ally {
     $this->allies[$this->index+1] = 1;
   }
 
-  function AddSubcard($cardID, $ownerID = null, $asPilot = false) {
+  function AddSubcard($cardID, $ownerID = null, $asPilot = false, $epicAction = false) {
     $subCardUniqueID = GetUniqueId();
     $ownerID = $ownerID ?? $this->playerID;
-    if($this->allies[$this->index+4] == "-") $this->allies[$this->index+4] = $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID;
-    else $this->allies[$this->index+4] = $this->allies[$this->index+4] . "," . $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID;
+    if($this->allies[$this->index+4] == "-") $this->allies[$this->index+4] = $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID . "," . ($epicAction ? "1" : "0") . ",0,0,0";
+    else $this->allies[$this->index+4] = $this->allies[$this->index+4] . "," . $cardID . "," . $ownerID . "," . ($asPilot ? "1" : "0") . "," . $subCardUniqueID . "," . ($epicAction ? "1" : "0") . ",0,0,0";
 
     if($asPilot) {
       AllyPlayedAsUpgradeAbility($cardID, $ownerID, $this);
@@ -517,12 +525,14 @@ class Ally {
     return $subCardUniqueID;
   }
 
-  function RemoveSubcard($subcardID, $subcardUniqueID = "") {
+  function RemoveSubcard($subcardID, $subcardUniqueID = "", $movingPilot = false) {
+    global $CS_PlayIndex;
     if($this->index == -1) return false;
     $subcards = $this->GetSubcards();
     for($i=0; $i<count($subcards); $i+=SubcardPieces()) {
       if($subcards[$i] == $subcardID && ($subcardUniqueID == "" || $subcards[$i+3] == $subcardUniqueID)) {
         $ownerId = $subcards[$i+1];
+        $epicAction = $subcards[$i+4] == 1;
 
         for ($j = SubcardPieces() - 1; $j >= 0; $j--) {
           unset($subcards[$i+$j]);
@@ -531,10 +541,10 @@ class Ally {
         $subcards = array_values($subcards);
         $this->allies[$this->index + 4] = count($subcards) > 0 ? implode(",", $subcards) : "-";
         if(DefinedTypesContains($subcardID, "Upgrade")) UpgradeDetached($subcardID, $this->playerID, "MYALLY-" . $this->index);
-        if(CardIDIsLeader($subcardID)) {
+        if(CardIDIsLeader($subcardID) && !$movingPilot) {
           $leaderUndeployed = LeaderUndeployed($subcardID);
           if($leaderUndeployed != "") {
-            AddCharacter($leaderUndeployed, $this->playerID, counters:1, status:1);
+            AddCharacter($leaderUndeployed, $this->playerID, counters:$epicAction ? 1 : 0, status:1);
           }
         }
         return $ownerId;
@@ -547,9 +557,9 @@ class Ally {
     AddCurrentTurnEffect($effectID, $this->PlayerID(), from:$from, uniqueID:$this->UniqueID());
   }
 
-  function Attach($cardID, $ownerID = null) {
+  function Attach($cardID, $ownerID = null, $epicAction = false) {
     $receivingPilot = $this->ReceivingPilot($cardID);
-    $subcardUniqueID = $this->AddSubcard($cardID, $ownerID, asPilot: $receivingPilot);
+    $subcardUniqueID = $this->AddSubcard($cardID, $ownerID, $receivingPilot, $epicAction);
     if (CardIsUnique($cardID)) {
       $this->CheckUniqueUpgrade($cardID);
       if($receivingPilot) {
@@ -769,7 +779,9 @@ class Ally {
   function HasPilotLeaderUpgrade() {
     $upgrades = $this->GetUpgrades(withMetadata:true);
     for($i=0; $i<count($upgrades); $i+=SubcardPieces()) {
-      if(CardIDIsLeader($upgrades[$i]) && $upgrades[$i+2] == "1") return true;
+      if (CardIDIsLeader($upgrades[$i]) && $upgrades[$i+2] == "1") {
+        return $upgrades[$i] != "3eb545eb4b";//Poe Dameron JTL leader (so far the only one)
+      }
     }
     return false;
   }

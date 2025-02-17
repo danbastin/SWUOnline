@@ -159,6 +159,7 @@ function RestoreAmount($cardID, $player, $index)
     case "4ae6d91ddc": $amount += 1; break;//Padme Amidala
     //Jump to Lightspeed
     case "7924461681": $amount += 1; break;//Leia Organa
+    case "0753794638": $amount += 2; break;//Corvus
     default: break;
   }
   if($amount > 0 && $ally->LostAbilities()) return 0;
@@ -289,6 +290,7 @@ function RaidAmount($cardID, $player, $index, $reportMode = false)
     case "9964112400": $amount += 2; break;//Rush Clovis
     case "0249398533": $amount += 1; break;//Obedient Vanguard
     case "0587196584": $amount += 1; break;//Independent Smuggler
+    case "1034181657": $amount += SearchCount(SearchAllies($player, tokenOnly: true)) > 0 ? 1 : 0;//First Order TIE Fighter
     default: break;
   }
   if($amount > 0 && $ally->LostAbilities()) return 0;
@@ -417,6 +419,8 @@ function HasSentinel($cardID, $player, $index)
       return true;
     case "6854247423"://Tantive IV
       return true;
+    case "8779760486"://Raddus
+      return SearchCount(SearchAllies($player, trait:"Resistance")) > 1;
     default: return false;
   }
 }
@@ -440,7 +444,14 @@ function HasGrit($cardID, $player, $index)
   $upgrades = $ally->GetUpgrades();
   for($i=0; $i<count($upgrades); ++$i)
   {
-    if($upgrades[$i] == "3f0b5622a7") return true;//Asajj Leader Unit
+    switch($upgrades[$i]) {
+      case "3f0b5622a7"://Asajj Leader Unit
+      case "3878744555"://Interceptor Ace
+        return true;
+      case "2633842896"://Biggs Darklighter
+        if(TraitContains($cardID, "Speeder", $player)) return true;
+      default: break;
+    }
   }
   for($i=0; $i<count($currentTurnEffects); $i+=CurrentTurnPieces()) {
     if($currentTurnEffects[$i+1] != $player) continue;
@@ -473,6 +484,7 @@ function HasGrit($cardID, $player, $index)
     case "6787851182"://Dwarf Spider Droid
     case "2761325938"://Devastating Gunship
     case "3f0b5622a7"://Asajj Leader Unit
+    case "3878744555"://Interceptor Ace
       return true;
     case "9832122703"://Luminara Unduli
       return IsCoordinateActive($player);
@@ -527,14 +539,17 @@ function HasOverwhelm($cardID, $player, $index)
     switch($allies[$i])
     {
       case "4484318969"://Moff Gideon Leader Unit //TODO: make a similar function for AttackerUID
-        if(CardCost($cardID) <= 3 && IsAllyAttackTarget() && AttackerMZID($mainPlayer) == "MYALLY-" . $index) return !LeaderAbilitiesIgnored();
-        else break;
+        if(CardCost($cardID) <= 3 && IsAllyAttackTarget() && AttackerMZID($mainPlayer && !LeaderAbilitiesIgnored()) == "MYALLY-" . $index) return true;
+        break;
       case "40b649e6f6"://Maul Leader Unit
-        if($index != $i) return !LeaderAbilitiesIgnored();
-        else break;
+        if($index != $i && !LeaderAbilitiesIgnored()) return true;
+        break;
       case "9017877021"://Clone Commander Cody
         if($index != $i && IsCoordinateActive($player)) return true;
-        else break;
+        break;
+      case "3666212779"://Captain Tarkin
+        if(TraitContains($cardID, "Vehicle", $player)) return true;
+        break;
       default: break;
     }
   }
@@ -551,8 +566,14 @@ function HasOverwhelm($cardID, $player, $index)
   // Check upgrades
   $upgrades = $ally->GetUpgrades();
   for($i=0; $i<count($upgrades); ++$i) {
-    if($upgrades[$i] == "0875550518") return true;//Grievous's Wheel Bike
-    if($upgrades[$i] == "4886127868") return true;//Nameless Valor
+    switch($upgrades[$i]) {
+      case "0875550518"://Grievous's Wheel Bike
+      case "4886127868"://Nameless Valor
+        return true;
+      case "2633842896"://Biggs Darklighter
+        if(TraitContains($cardID, "Fighter", $player)) return true;
+      default: break;
+    }
   }
   switch($cardID)
   {
@@ -745,6 +766,7 @@ function HasShielded($cardID, $player)
     case "1519837763"://Shuttle ST-149
     case "6300552434"://Gold Leader
     case "7700932371"://Boba Fett
+    case "9325037410"://Iden Versio
       return true;
     default: return false;
   }
@@ -866,6 +888,7 @@ function AbilityCost($cardID, $index=-1, $theirCard = false)
   global $currentPlayer;
   $abilityName = $theirCard ? GetOpponentControlledAbilityNames($cardID) : GetResolvedAbilityName($cardID);
   if($abilityName == "Heroic Resolve") return 2;
+  if($abilityName == "Poe Pilot") return 1;
   switch($cardID) {
     //Spark of Rebellion
     case "2579145458"://Luke Skywalker
@@ -921,6 +944,8 @@ function AbilityCost($cardID, $index=-1, $theirCard = false)
       return $abilityName == "Attack" ? 1 : 0;
     case "8943696478"://Admiral Holdo
       return $abilityName == "Buff" ? 1 : 0;
+    case "8520821318"://Poe Dameron
+      return $abilityName == "Pilot" ? 1 : 0;
     default: break;
   }
   if(IsAlly($cardID)) return 0;
@@ -950,20 +975,10 @@ function BlockValue($cardID)
   return 0;
 }
 
-function AttackValue($cardID)
-{
-  global $combatChainState, $mainPlayer, $currentPlayer;
-  if(!$cardID) return "";
-  switch($cardID)
-  {
-    case "4897501399": return 2;//Ruthlessness
-    case "7687006104": return 1;//Foundling
-    case "5738033724": return 2;//Boba Fett's Armor
-    case "3514010297": return 1;//Mandalorian Armor
-    case "4843813137": return 1;//Brutal Traditions
-    case "3141660491": return 4;//The Darksaber
-    case "4886127868": return 2;//Nameless Valor
-    default: return CardPower($cardID);
+function AttackValue($cardID) {
+  switch ($cardID) {
+    default:
+      return CardPower($cardID);
   }
 }
 
@@ -1015,7 +1030,7 @@ function GetOpponentAbilityTypes($cardID, $index = -1, $from="-") {
 
 function GetAbilityTypes($cardID, $index = -1, $from="-")
 {
-  global $currentPlayer;
+  global $currentPlayer, $CS_NumUsesLeaderUpgrade1;
   $abilityTypes = "";
 
   $set = CardSet($cardID);
@@ -1032,8 +1047,7 @@ function GetAbilityTypes($cardID, $index = -1, $from="-")
     $ally = new Ally("MYALLY-" . $index, $currentPlayer);
 
     if(UIDIsAffectedByMalevolence($ally->UniqueID())) {
-      $abilityTypes = str_replace(",AA", "", $abilityTypes);
-      $abilityTypes = str_replace("AA", "", $abilityTypes);
+      $abilityTypes = FilterOutAttackAbilityType($abilityTypes);
     }
 
     $upgrades = $ally->GetUpgrades();
@@ -1046,6 +1060,12 @@ function GetAbilityTypes($cardID, $index = -1, $from="-")
         case "2397845395"://Strategic Acumen
           if($abilityTypes != "") $abilityTypes .= ",";
           $abilityTypes .= "A";
+          break;
+        case "3eb545eb4b"://Poe Dameron JTL leader
+          if(GetClassState($currentPlayer, $CS_NumUsesLeaderUpgrade1) > 0) {
+            if($abilityTypes != "") $abilityTypes .= ",";
+            $abilityTypes .= "A";
+          }
           break;
         default: break;
       }
@@ -1075,6 +1095,10 @@ function GetAbilityTypes($cardID, $index = -1, $from="-")
 
 function CardIDIsLeader($cardID, $playerID = "") {
   return DefinedTypesContains($cardID, "Leader", $playerID);
+}
+
+function FilterOutAttackAbilityType($abilityTypes) {
+  return str_replace("AA", "", str_replace(",AA", "", str_replace("AA,", "", $abilityTypes)));
 }
 
 function CheckSORAbilityTypes($cardID) {
@@ -1255,6 +1279,8 @@ function CheckJTLAbilityTypes($cardID) {
       return LeaderAbilitiesIgnored() ? "" : "A";
     case "3132453342"://Captain Phasma
       return LeaderAbilitiesIgnored() ? "" : "A";
+    case "8520821318"://Poe Dameron
+      return LeaderAbilitiesIgnored() ? "" : "A";
     default: return "";
   }
 }
@@ -1262,7 +1288,7 @@ function CheckJTLAbilityTypes($cardID) {
 
 function GetAbilityNames($cardID, $index = -1, $validate=false)
 {
-  global $currentPlayer;
+  global $currentPlayer, $CS_NumUsesLeaderUpgrade1;
   $abilityNames = "";
   $set = CardSet($cardID);
   switch($set) {
@@ -1287,6 +1313,13 @@ function GetAbilityNames($cardID, $index = -1, $validate=false)
           if($abilityNames != "") $abilityNames .= ",";
           $abilityNames .= "Strategic Acumen";
           break;
+        case "3eb545eb4b"://Poe Dameron JTL leader
+          if(GetClassState($currentPlayer, $CS_NumUsesLeaderUpgrade1) > 0) {
+            if($abilityNames != "") $abilityNames .= ",";
+            $abilityNames .= "Poe Pilot";
+            if($validate && $ally->IsExhausted()) $abilityNames = FilterOutAttackAbilityName($abilityNames);
+          }
+          break;
         default: break;
       }
     }
@@ -1296,8 +1329,7 @@ function GetAbilityNames($cardID, $index = -1, $validate=false)
     }
 
     if(UIDIsAffectedByMalevolence($ally->UniqueID())) {
-      $abilityNames = str_replace(",Attack", "", $abilityNames);
-      $abilityNames = str_replace("Attack", "", $abilityNames);
+      $abilityNames = FilterOutAttackAbilityName($abilityNames);
     }
   }
   else if(DefinedTypesContains($cardID, "Leader", $currentPlayer)) {
@@ -1316,6 +1348,10 @@ function GetAbilityNames($cardID, $index = -1, $validate=false)
   }
 
   return $abilityNames;
+}
+
+function FilterOutAttackAbilityName($abilityNames) {
+  return str_replace("Attack", "", str_replace(",Attack", "", str_replace("Attack,", "", $abilityNames)));
 }
 
 function CheckSORAbilityNames($cardID, $index, $validate) {
@@ -1535,6 +1571,8 @@ function CheckJTLAbilityNames($cardID) {
       return LeaderAbilitiesIgnored() ? "" : "TIE Fighter";
     case "3132453342"://Captain Phasma
       return LeaderAbilitiesIgnored() ? "" : "Deal Damage";
+    case "8520821318"://Poe Dameron
+      return LeaderAbilitiesIgnored() ? "" : "Pilot";
     default: return "";
   }
 }
@@ -1931,6 +1969,10 @@ function LeaderUnit($cardID) {
       return "fb0da8985e";
     case "3132453342"://Captain Phasma
       return "fda7bdc316";
+    case "8520821318"://Poe Dameron
+      return "3eb545eb4b";
+    case "3905028200"://Admiral Trench
+      return "7c082aefc9";
     default: return "";
   }
 }
@@ -2075,6 +2117,10 @@ function LeaderUndeployed($cardID) {
       return "7661383869";
     case "fda7bdc316"://Captain Phasma Leader Unit
       return "3132453342";
+    case "3eb545eb4b"://Poe Dameron
+      return "8520821318";
+    case "7c082aefc9"://Admiral Trench Leader Unit
+      return "3905028200";
     default: return "";
   }
 }
@@ -2123,16 +2169,9 @@ function HasAttackAbility($cardID) {
 }
 
 function CardHP($cardID) {
-  switch($cardID)
-  {
-    case "5738033724": return 2;//Boba Fett's Armor
-    case "8877249477": return 2;//Legal Authority
-    case "7687006104": return 1;//Foundling
-    case "3514010297": return 3;//Mandalorian Armor
-    case "4843813137": return 2;//Brutal Traditions
-    case "3141660491": return 3;//The Darksaber
-    case "4886127868": return 2;//Nameless Valor
-    default: return CardHPDictionary($cardID);
+  switch($cardID) {
+    default:
+      return CardHPDictionary($cardID);
   }
 }
 
@@ -2369,13 +2408,16 @@ function PilotingCost($cardID, $player = "") {
     case "0524529055": $minCost = 2; break;//Snap Wexley
     case "0587196584": $minCost = 1; break;//Independent Smuggler
     case "1039444094": $minCost = 2; break;//Paige Tico
+    case "1911230033": $minCost = 1; break;//Wingman Victor Three
     case "1463418669": $minCost = 2; break;//IG-88
     case "2283726359": $minCost = 1; break;//BB-8
     case "2633842896": $minCost = 1; break;//Briggs Darklighter
     case "3282713547": $minCost = 2; break;//Dengar
     case "3475471540": $minCost = 2; break;//Cassian Andor
     case "3874382333": $minCost = 2; break;//Academy Graduate
+    case "3878744555": $minCost = 3; break;//Interceptor Ace
     case "4573745395": $minCost = 2; break;//Bossk
+    case "4921363233": $minCost = 1; break;//Wingman Victor Two
     case "5375722883": $minCost = 0; break;//R2-D2
     case "5673100759": $minCost = 2; break;//Boshek
     case "6421006753": $minCost = 2; break;//The Mandalorian
@@ -2385,6 +2427,7 @@ function PilotingCost($cardID, $player = "") {
     case "7420426716": $minCost = 1; break;//Dagger Squadron Pilot
     case "7700932371": $minCost = 2; break;//Boba Fett
     case "8523415830": $minCost = 2; break;//Anakin Skywalker
+    case "9325037410": $minCost = 3; break;//Iden Versio
     default: break;
   }
   return $minCost;
@@ -2542,7 +2585,3 @@ function DefinedCardType2Wrapper($cardID)
 // {
 //   return GeneratedRarity($cardID);
 // }
-
-function CardTitles() {
-  return ["2-1B Surgical Droid","332nd Stalwart","4-LOM","41st Elite Corps","501st Liberator","97th Legion","A Fine Addition","A New Adventure","AT-AT Suppressor","AT-ST","AT-TE Vanguard","Aayla Secura","Academy Defense Walker","Academy Training","Adelphi Patrol Wing","Administrator's Tower","Admiral Ackbar","Admiral Motti","Admiral Ozzel","Admiral Piett","Admiral Trench","Admiral Yularen","Advanced Recon Commando","Agent Kallus","Aggression","Aggrieved Parliamentarian","Ahsoka Tano","Ahsoka's Padawan Lightsaber","Aid from the Innocent","Alliance Dispatcher","Alliance X-Wing","Altering the Deal","Anakin Skywalker","Anakin's Interceptor","Ardent Sympathizer","Armed to the Teeth","Armored Saber Tank","Arquitens Assault Cruiser","Asajj Ventress","Asteroid Sanctuary","Attack Pattern Delta","Aurra Sing","Auzituck Liberator Gunship","Avenger","B1 Attack Platform","B1 Security Team","B2 Legionnaires","Bail Organa","Baktoid Spider Droid","Bamboozle","Barriss Offee","Batch Brothers","Battle Droid","Battle Droid Escort","Battle Droid Legion","Battlefield Marine","Baze Malbus","Bazine Netal","Bendu","Benthic \"Two Tubes\"","Bib Fortuna","Black One","Black Sun Starfighter","Blizzard Assault AT-AT","Blood Sport","Bo-Katan Kryze","Boba Fett","Boba Fett's Armor","Bodhi Rook","Bold Recon Commando","Bold Resistance","Bombing Run","Bossk","Bounty Guild Initiate","Bounty Hunter Crew","Bounty Hunter's Quarry","Bounty Posting","Brain Invaders","Bravado","Breaking In","Bright Hope","Brutal Traditions","C-3PO","Cad Bane","Calculated Lethality","Calculating MagnaGuard","Cantina Bouncer","Cantina Braggart","Capital City","Captain Rex","Captain Typho","Cargo Juggernaut","Cartel Spacer","Cartel Turncoat","Cassian Andor","Catacombs of Cadera","Caught in the Crossfire","Cell Block Guard","Chain Code Collector","Chancellor Palpatine","Change of Heart","Chewbacca","Chimaera","Chirrut Îmwe","Choose Sides","Chopper","Chopper Base","Clan Challengers","Clan Saxon Gauntlet","Clan Wren Rescuer","Clear the Field","Clone","Clone Cohort","Clone Commander Cody","Clone Deserter","Clone Dive Trooper","Clone Heavy Gunner","Clone Trooper","Cloud City Wing Guard","Cloud-Rider","Cobb Vanth","Collections Starhopper","Colonel Yularen","Command","Command Center","Commission","Compassionate Senator","Concord Dawn Interceptors","Confederate Courier","Confederate Tri-Fighter","Confiscate","Consolidation of Power","Consortium StarViper","Consular Security Force","Corellian Freighter","Corner the Prey","Coronet City","Coruscant Dissident","Coruscant Guard","Count Dooku","Covert Strength","Covetous Rivals","Crafty Smuggler","Creative Thinking","Criminal Muscle","Cripple Authority","Crosshair","Cunning","DJ","Dagobah Swamp","Daring Raid","Darth Maul","Darth Vader","Daughter of Dathomir","Death Mark","Death Star Stormtrooper","Death Trooper","Death Watch Hideout","Death Watch Loyalist","Death by Droids","Del Meeko","Dendup's Loyalist","Dengar","Desperado Freighter","Desperate Attack","Detention Block Rescue","Devastating Gunship","Devastator","Devotion","Director Krennic","Disabling Fang Fighter","Disaffected Senator","Disarm","Discerning Veteran","Disruptive Burst","Distant Patroller","Doctor Aphra","Doctor Evazan","Doctor Pershing","Don't Get Cocky","Droid Cohort","Droid Commando","Droid Deployment","Droid Manufactory","Droid Starfighter","Droideka Security","Drop In","Dryden Vos","Duchess's Champion","Dwarf Spider Droid","Echo","Echo Base","Echo Base Defender","Electrostaff","Elite P-38 Starfighter","Embo","Emperor Palpatine","Emperor's Royal Guard","Encouraging Leadership","Endless Legions","Energy Conversion Lab","Enforced Loyalty","Enfys Nest","Enterprising Lackeys","Enticing Reward","Entrenched","Ephant Mon","Equalize","Escort Skiff","Eta-2 Light Interceptor","Evacuate","Evidence of the Crime","Execute Order 66","Experience","Experience","Ezra Bridger","Falchion Ion Tank","Fallen Lightsaber","Favorable Delegate","Fell the Dragon","Fenn Rau","Fennec Shand","Fett's Firespray","Fifth Brother","Fighters for Freedom","Final Showdown","Finalizer","Finn","First Legion Snowtrooper","First Light","Fives","Fleet Lieutenant","Follower of The Way","For The Republic","For a Cause I Believe In","Force Choke","Force Lightning","Force Throw","Forced Surrender","Foresight","Foundling","Freelance Assassin","Freetown Backup","Frontier AT-RT","Frontier Trader","Frontline Shuttle","Frozen in Carbonite","Fugitive Wookiee","Galactic Ambition","Gamorrean Guards","Gamorrean Retainer","Gar Saxon","General Dodonna","General Grievous","General Krell","General Rieekan","General Tagge","General Veers","General's Blade","General's Guardian","Gentle Giant","Geonosis Patrol Fighter","Gideon Hask","Gideon's Light Cruiser","Give In to Your Anger","Gladiator Star Destroyer","Gor","Grand Admiral Thrawn","Grand Inquisitor","Grand Moff Tarkin","Greedo","Greef Karga","Green Squadron A-Wing","Grenade Strike","Grey Squadron Y-Wing","Grievous Reassembly","Grievous's Wheel Bike","Grim Resolve","Grogu","Guardian of the Whills","Guarding the Way","Guavian Antagonizer","Guerilla Attack Pod","Guerilla Insurgency","Guild Target","HWK-290 Freighter","Hailfire Tank","Han Solo","Hardpoint Heavy Blaster","Headhunter Squadron","Headhunting","Heavy Persuader Tank","Hello There","Hera Syndulla","Heroes on Both Sides","Heroic Renegade","Heroic Resolve","Heroic Sacrifice","Hevy","Hidden Sharpshooter","Hold-Out Blaster","Home One","Homestead Militia","Hondo Ohnaka","Hotshot DL-44 Blaster","Hotshot V-Wing","House Kast Soldier","Hunter","Hunter of the Haxion Brood","Hunting Nexu","Hutt's Henchmen","Huyang","Hylobon Enforcer","I Am Your Father","I Had No Choice","I Have the High Ground","IG-11","IG-88","ISB Agent","Iden Versio","Imperial Interceptor","Imprisoned","Impropriety Among Thieves","In Defense of Kamino","In Pursuit","Incinerator Trooper","Independent Senator","Infantry of the 212th","Inferno Four","Infiltrating Demolisher","Infiltrator's Skill","Inspiring Mentor","It Binds All Things","Jabba the Hutt","Jabba's Palace","Jabba's Rancor","Jango Fett","Jar Jar Binks","Jawa Scavenger","Jedha Agitator","Jedha City","Jedi Lightsaber","Jesse","Jetpack","Jyn Erso","K-2SO","KCM Mining Facility","Kalani","Kanan Jarrus","Karabast","Kashyyyk Defender","Keep Fighting","Kestro City","Ketsu Onyo","Ki-Adi-Mundi","Kihraxz Heavy Fighter","Kintan Intimidator","Kit Fisto","Knight of the Republic","Koska Reeves","Kragan Gorr","Kraken","Krayt Dragon","Krrsantan","Kuiil","Kylo Ren","Kylo's TIE Silencer","L3-37","Lady Proxima","Lair of Grievous","Lando Calrissian","Legal Authority","Leia Organa","Let the Wookiee Win","Lethal Crackdown","Level 1313","Liberated Slaves","Lieutenant Childsen","Lom Pyke","Look the Other Way","Lothal Insurgent","Low Altitude Gunship","Luke Skywalker","Luke's Lightsaber","Luminara Unduli","Lurking TIE Phantom","Lux Bonteri","Ma Klounkee","Mace Windu","Mace Windu's Lightsaber","MagnaGuard Wing Leader","Make an Opening","Malevolence","Mandalorian Armor","Mandalorian Warrior","Manufactured Soldiers","Mas Amedda","Maul","Maximum Firepower","Maz Kanata","Maz Kanata's Castle","Medal Ceremony","Mercenary Company","Mercenary Gunship","Merciless Contest","Midnight Repairs","Migs Mayfeld","Millennium Falcon","Mining Guild TIE Fighter","Mission Briefing","Mister Bones","Modded Cohort","Moff Gideon","Moisture Farmer","Moment of Glory","Moment of Peace","Mon Mothma","Morgan Elsbeth","Multi-Troop Transport","Mystic Reflection","Nala Se","Nameless Valor","Nevarro City","Niima Outpost Constables","Nite Owl Skirmisher","No Bargain","No Good to Me Dead","Now There Are Two of Them","Nute Gunray","OOM-Series Officer","Obedient Vanguard","Obi-Wan Kenobi","Obi-Wan's Aethersprite","Occupier Siege Tank","Old Access Codes","Omega","On Top of Things","On the Doorstep","Open Fire","Osi Sobeck","Outer Rim Headhunter","Outflank","Outland TIE Vanguard","Outlaw Corona","Outmaneuver","Outspoken Representative","Overwhelming Barrage","Padawan Starfighter","Padmé Amidala","Palpatine's Return","Partisan Insurgent","Patrolling AAT","Patrolling V-Wing","Pau City","Pelta Supply Frigate","Perilous Position","Petition the Senate","Petranaki Arena","Phase I Clone Trooper","Phase II Clone Trooper","Phase-III Dark Trooper","Pillage","Pirate Battle Tank","Pirated Starfighter","Planetary Invasion","Plo Koon","Poe Dameron","Poggle the Lesser","Political Pressure","Power Failure","Power of the Dark Side","Pre Vizsla","Precision Fire","Prepare for Takeoff","Price on Your Head","Principled Outlaw","Prisoner of War","Private Manufacturing","Privateer Crew","Privateer Scyk","Protector","Protector of the Throne","Providence Destroyer","Public Enemy","Punishing One","Pyke Palace","Pyke Sentinel","Pyrrhic Assault","Qi'ra","Quinlan Vos","R2-D2","Rallying Cry","Razor Crest","Rebel Assault","Rebel Pathfinder","Reckless Gunslinger","Reckless Torrent","Recruit","Red Three","Redemption","Regional Governor","Regional Sympathizers","Reinforcement Walker","Relentless","Relentless Pursuit","Relentless Rocket Droid","Remnant Reserves","Remnant Science Facility","Remote Village","Repair","Reprocess","Republic ARC-170","Republic Attack Pod","Republic Commando","Republic Defense Carrier","Republic Tactical Officer","Reputable Hunter","Resilient","Resolute","Resourceful Pursuers","Restock","Restored ARC-170","Resupply","Rey","Rhokai Gunship","Rich Reward","Rickety Quadjumper","Rival's Fall","Roger Roger","Rogue Operative","Rogue Squadron Skirmisher","Rose Tico","Royal Guard Attaché","Rugged Survivors","Rukh","Rule with Respect","Rune Haako","Rush Clovis","Ruthless Assassin","Ruthless Raider","Ruthlessness","Ryloth Militia","Sabine Wren","Salacious Crumb","San Hill","Sanctioner's Shuttle","Satine Kryze","Savage Opress","Saw Gerrera","Scanning Officer","Scout Bike Pursuer","Search Your Feelings","Seasoned Shoretrooper","Second Chance","Security Complex","Self-Destruct","Senatorial Corvette","Separatist Commando","Separatist Super Tank","Seventh Fleet Defender","Seventh Sister","Shaak Ti","Shadow Collective Camp","Shadowed Intentions","Shield","Shield","Shoot First","Slaver's Freighter","Sly Moore","Smoke and Cinders","Smuggler's Aid","Smuggler's Starfighter","Smuggling Compartment","Snapshot Reflexes","Sneak Attack","Snowspeeder","Snowtrooper Lieutenant","Soldier of the 501st","Soulless One","Spare the Target","Spark of Hope","Spark of Rebellion","SpecForce Soldier","Spice Mines","Squad Support","Squadron of Vultures","Star Wing Scout","Steadfast Battalion","Steadfast Senator","Steela Gerrera","Stolen Landspeeder","Strafing Gunship","Strategic Acumen","Strategic Analysis","Street Gang Recruiter","Strike True","Subjugating Starfighter","Sugi","Sundari","Sundari Peacekeeper","Super Battle Droid","Supercommando Squad","Superlaser Blast","Superlaser Technician","Supreme Leader Snoke","Surprise Strike","Survivors' Gauntlet","Swoop Down","Swoop Racer","Sword and Shield Maneuver","Synara San","Synchronized Strike","Syndicate Lackeys","System Patrol Craft","TIE Advanced","TIE/ln Fighter","Tactical Advantage","Tactical Droid Commander","Take Captive","Takedown","Tarfful","Tarkintown","Tech","The Armorer","The Chaos of War","The Client","The Clone Wars","The Crystal City","The Darksaber","The Emperor's Legion","The Force Is With Me","The Ghost","The Invasion of Christophsis","The Invisible Hand","The Mandalorian","The Mandalorian's Rifle","The Marauder","The Nest","The Zillo Beast","This Is The Way","Timely Intervention","Tipoca City","Tobias Beckett","Top Target","Toro Calican","Trade Federation Shuttle","Traitorous","Trandoshan Hunters","Tranquility","Tri-Droid Suppressor","Triple Dark Raid","Twice the Pride","Twin Pod Cloud Car","U-Wing Reinforcement","Underworld Thug","Unexpected Escape","Unlicensed Headhunter","Unlimited Power","Unmasking the Conspiracy","Unnatural Life","Unrefusable Offer","Unshakeable Will","Vader's Lightsaber","Val","Valiant Assault Ship","Vambrace Flamethrower","Vambrace Grappleshot","Vanguard Ace","Vanguard Droid Bomber","Vanguard Infantry","Vanquish","Vigilance","Vigilant Honor Guards","Vigilant Pursuit Craft","Village Protectors","Viper Probe Droid","Volunteer Soldier","Vulture Interceptor Wing","Wampa","Wanted","Wanted Insurgents","Warbird Stowaway","Warrior Drone","Wartime Profiteering","Wartime Trade Official","Warzone Lieutenant","Wat Tambor","Waylay","Wedge Antilles","Weequay Pirate Gang","Wild Rancor","Wilderness Fighter","Wing Leader","Wolf Pack Escort","Wolffe","Wookiee Warrior","Wrecker","Wroshyr Tree Tender","Xanadu Blood","Yoda","You're My Only Hope","Zeb Orrelios","Ziro the Hutt","Zorii Bliss","Zuckuss"];
-}

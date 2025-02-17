@@ -107,13 +107,13 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
     } else {
       if ($gameState == 5 && $timeDiff > $DisconnectFirstWarningMS && $otherPlayerDisconnectStatus == 0 && ($oppStatus == "0")) {
         $warningSeconds = ($DisconnectTimeoutMS - $DisconnectFirstWarningMS) / 1000;
-        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>Player $otherP, are you still there? Your opponent will be allowed to claim victory in $warningSeconds seconds if no activity is detected.");
+        WriteLog(KarabotSpan() . "Player $otherP, are you still there? Your opponent will be allowed to claim victory in $warningSeconds seconds if no activity is detected.");
         IncrementCachePiece($gameName, $otherP + 14);
         GamestateUpdated($gameName);
       }
       if ($gameState == 5 && $timeDiff > $DisconnectFinalWarningMS && $otherPlayerDisconnectStatus == 1 && ($oppStatus == "0")) {
         $finalWarningSeconds = ($DisconnectTimeoutMS - $DisconnectFinalWarningMS) / 1000;
-        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>$finalWarningSeconds seconds left, Player $otherP...");
+        WriteLog(KarabotSpan() . "$finalWarningSeconds seconds left, Player $otherP...");
         IncrementCachePiece($gameName, $otherP + 14);
         GamestateUpdated($gameName);
       }
@@ -136,7 +136,7 @@ while ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       if ($gameState == 5 && $lastCurrentPlayer == $playerID && ($currentTime - $lastActionTime) > $InputWarningMS && $lastActionWarning === 0 && $finalWarning == 0) {
         $inputWarningSeconds = $InputWarningMS / 1000;
         $inputWarningSecondsLeft = ($InputTimeoutMS - $InputWarningMS) / 1000;
-        WriteLog("<span style='font-weight:bold; color:plum'>Karabot: </span>No input in over $inputWarningSeconds seconds; Player $playerID has $inputWarningSecondsLeft more seconds to take an action or the turn will be passed");
+        WriteLog(KarabotSpan() . "No input in over $inputWarningSeconds seconds; Player $playerID has $inputWarningSecondsLeft more seconds to take an action or the turn will be passed");
         SetCachePiece($gameName, 18, $playerID);
         GamestateUpdated($gameName);
       }
@@ -480,7 +480,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       $layerName = IsAbilityLayer($layers[$i]) ? $layers[$i + 2] : $layers[$i]; // Get the layer name
       $layerController = $layers[$i + 1]; // Get the layer controller
       $layerColor = ($layerController == $playerID) ? 1 : 2; // Determine the color based on the controller
-
+      $layerColor = str_starts_with($layers[$i + 4], "ALLYBOUNTIES") ? ($layerColor == 1 ? 2 : 1) : $layerColor; // Special case for ally collect bounties
       if ($playerID == 3) { // Special case for playerID 3
         $layerColor = ($layerController == $otherPlayer) ? 2 : 1;
       }
@@ -928,48 +928,155 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
   }
 
   // MULTICHOOSETEXT and MAYMULTICHOOSETEXT are deprecated, use MULTICHOOSE and MAYMULTICHOOSE instead
-  if (($turn[0] == "MULTICHOOSETHEIRDISCARD" || $turn[0] == "MULTICHOOSEDISCARD" || $turn[0] == "MULTICHOOSEHAND" || $turn[0] == "MAYMULTICHOOSEHAND" || $turn[0] == "MULTICHOOSEUNIT" || $turn[0] == "MULTICHOOSETHEIRUNIT" || $turn[0] == "MULTICHOOSEDECK" || $turn[0] == "MULTICHOOSETEXT" || $turn[0] == "MAYMULTICHOOSETEXT" || $turn[0] == "MULTICHOOSETHEIRDECK" || $turn[0] == "MAYMULTICHOOSEAURAS") && $currentPlayer == $playerID) {
+  if (($turn[0] == "MULTICHOOSETHEIRDISCARD" || $turn[0] == "MULTICHOOSEDISCARD"
+      || $turn[0] == "MULTICHOOSEHAND" || $turn[0] == "MAYMULTICHOOSEHAND"
+      || $turn[0] == "MULTICHOOSEUNIT" || $turn[0] == "MULTICHOOSETHEIRUNIT" || $turn[0] == "MULTICHOOSEOURUNITS"
+      || $turn[0] == "MULTICHOOSEDECK" || $turn[0] == "MULTICHOOSETEXT" || $turn[0] == "MAYMULTICHOOSETEXT" || $turn[0] == "MULTICHOOSETHEIRDECK"
+      || $turn[0] == "MULTICHOOSEMYUNITSANDBASE" || $turn[0] == "MULTICHOOSETHEIRUNITSANDBASE" || $turn[0] == "MULTICHOOSEOURUNITSANDBASE"
+      || $turn[0] == "MAYMULTICHOOSEAURAS") && $currentPlayer == $playerID) {
     $content = "";
+    $multiTheirAllies = &GetAllies($playerID == 1 ? 2 : 1);
     $multiAllies = &GetAllies($playerID);
+    $theirBaseCardID = "";
+    $myBaseCardID = "";
     echo ("<div 'display:inline; width: 100%;'>");
-    $params = explode("-", $turn[2]);
-    $options = explode(",", $params[1]);
-    $caption = "<div>Choose up to " . $params[0] . " card" . ($params[0] > 1 ? "s." : ".") . "</div>";
+    $sets = explode("&", $turn[2]);
+    $all = count($sets) == 2;
+    $options = [];
+    if(!$all) {
+      $params = explode("-", $sets[0]);
+      if($turn[0] == "MULTICHOOSEMYUNITSANDBASE") {
+        if($params[0] == "0;0") {
+          $options[] = "BASE";
+          $myBaseCardID = GetPlayerCharacter($playerID)[0];
+        } else {
+          $pieces = explode(";", $params[0]);
+          $options[] = "BASE";
+          $myBaseCardID = GetPlayerCharacter($playerID)[$pieces[0]];
+          $params[0] = $pieces[1];
+        }
+      }
+      if($turn[0] == "MULTICHOOSETHEIRUNITSANDBASE") {
+        if($params[0] == "0;0") {
+          $options[] = "BASE";
+          $theirBaseCardID = GetPlayerCharacter($playerID == 1 ? 2 : 1)[0];
+        } else {
+          $pieces = explode(";", $params[0]);
+          $options[] = "BASE";
+          $theirBaseCardID = GetPlayerCharacter($playerID == 1 ? 2 : 1)[$pieces[0]];
+          $params[0] = $pieces[1];
+        }
+      }
+      $options = array_merge($options, $params[1] != "" ? explode(",", $params[1]) : []);
+    } else {
+      //TODO: Redemption
+      $paramsTheirs = explode("-", $sets[0]);
+      $paramsMine = explode("-", $sets[1]);
+      $params = [$paramsTheirs, $paramsMine];
+
+      $optionsTheirs = $paramsTheirs[1] == "" ? [] : explode(",", $paramsTheirs[1]);
+      $optionsMine = $paramsMine[1] == "" ? [] : explode(",", $paramsMine[1]);
+      $options = [$optionsTheirs, $optionsMine];
+    }
+    if(!$all) {
+      $caption = "<div>Choose up to " . $params[0] . " card" . ($params[1] > 1 ? "s." : ".") . "</div>";
+      $content .= CreateForm($playerID, "Submit", 19, count($options));
+      $content .= "<table class='table-border-a'><tr>";
+      for ($i = 0; $i < count($options); ++$i) {
+        $content .= "<td>";
+        $content .= CreateCheckbox($i, strval($i));
+        $content .= "</td>";
+      }
+      $content .= "</tr><tr>";
+      for ($i = 0; $i < count($options); ++$i) {
+        $content .= "<td>";
+        $content .= "<div class='container'>";
+        if ($turn[0] == "MULTICHOOSEDISCARD")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myDiscard[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSETHEIRDISCARD")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($theirDiscard[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSEHAND" || $turn[0] == "MAYMULTICHOOSEHAND")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myHand[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSEUNIT")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($multiAllies[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSETHEIRUNIT")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($multiTheirAllies[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSEMYUNITSANDBASE")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . (
+            $options[$i] == "BASE"
+              ? Card($myBaseCardID, "concat", $cardSize, 0, 1)
+              : Card($multiAllies[$options[$i]], "concat", $cardSize, 0, 1)
+            )
+            . "</label>";
+        else if ($turn[0] == "MULTICHOOSETHEIRUNITSANDBASE")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . (
+            $options[$i] == "BASE"
+              ? Card($theirBaseCardID, "concat", $cardSize, 0, 1)
+              : Card($multiTheirAllies[$options[$i]], "concat", $cardSize, 0, 1)
+            )
+            . "</label>";
+        else if ($turn[0] == "MULTICHOOSEDECK")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myDeck[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSETHEIRDECK")
+          $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($theirDeck[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
+        else if ($turn[0] == "MULTICHOOSETEXT" || $turn[0] == "MAYMULTICHOOSETEXT")
+          $content .= implode(" ", explode("_", strval($options[$i])));
+        $content .= "<div class='overlay'><div class='text'>Select</div></div></div>";
+        $content .= "</td>";
+      }
+    }
+    else {
+      //TODO: Redemption
+      $content .= CreateForm($playerID, "Submit", 19, count($options[0]), count($options[1]));
+      $content .= "<table class='table-border-a'><tr>";
+      for($i = 0; $i < count($options[0]); ++$i) {
+        if($i == floor(count($options[0]) / 2))
+          $content .= "<td style='color:white;'>Theirs</td>";
+        else
+          $content .= "<td></td>";
+      }
+      $content .= "</tr><tr>";
+      for ($i = 0; $i < count($options[0]); ++$i) {
+        $content .= "<td>";
+        $content .= CreateCheckbox("t" . $i, strval($i));
+        $content .= "</td>";
+      }
+      $content .= "</tr><tr>";
+      for($i = 0; $i < count($options[0]); ++$i) {
+        $content .= "<td>";
+        $content .= "<div class='container'>";
+        $content .= "<label class='multichoose' for=chkt" . $i . ">" . Card($multiTheirAllies[$options[0][$i]], "concat", $cardSize, 0, 1) . "</label>";
+        $content .= "<div class='overlay'><div class='text'>Select</div></div></div>";
+        $content .= "</td>";
+      }
+      $content .= "</tr></table>";
+      $content .= "<table class='table-border-a'><tr>";
+      for($i = 0; $i < count($options[1]); ++$i) {
+        if($i == floor(count($options[1]) / 2))
+          $content .= "<td style='color:white;'>Mine</td>";
+        else
+          $content .= "<td></td>";
+      }
+      $content .= "</tr><tr>";
+      for ($i = 0; $i < count($options[1]); ++$i) {
+        $content .= "<td>";
+        $content .= CreateCheckbox("m" . $i, strval($i));
+        $content .= "</td>";
+      }
+      $content .= "</tr><tr>";
+      for($i = 0; $i < count($options[1]); ++$i) {
+        $content .= "<td>";
+        $content .= "<div class='container'>";
+        $content .= "<label class='multichoose' for=chkm" . $i . ">" . Card($multiAllies[$options[1][$i]], "concat", $cardSize, 0, 1) . "</label>";
+        $content .= "<div class='overlay'><div class='text'>Select</div></div></div>";
+        $content .= "</td>";
+      }
+    }
+
+    $content .= "</tr></table></form></div>";
     if (GetDQHelpText() != "-")
       $caption = "<div>" . implode(" ", explode("_", GetDQHelpText())) . "</div>";
-    $content .= CreateForm($playerID, "Submit", 19, count($options));
-    $content .= "<table class='table-border-a'><tr>";
-    for ($i = 0; $i < count($options); ++$i) {
-      $content .= "<td>";
-      $content .= CreateCheckbox($i, strval($i));
-      $content .= "</td>";
-    }
-    $content .= "</tr><tr>";
-    for ($i = 0; $i < count($options); ++$i) {
-      $content .= "<td>";
-      $content .= "<div class='container'>";
-      if ($turn[0] == "MULTICHOOSEDISCARD")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myDiscard[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSETHEIRDISCARD")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($theirDiscard[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSEHAND" || $turn[0] == "MAYMULTICHOOSEHAND")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myHand[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSEUNIT")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($multiAllies[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSETHEIRUNIT") {
-        $multiTheirAllies = &GetAllies($playerID == 1 ? 2 : 1);
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($multiTheirAllies[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      } else if ($turn[0] == "MULTICHOOSEDECK")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($myDeck[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSETHEIRDECK")
-        $content .= "<label class='multichoose' for=chk" . $i . ">" . Card($theirDeck[$options[$i]], "concat", $cardSize, 0, 1) . "</label>";
-      else if ($turn[0] == "MULTICHOOSETEXT" || $turn[0] == "MAYMULTICHOOSETEXT")
-        $content .= implode(" ", explode("_", strval($options[$i])));
-      $content .= "<div class='overlay'><div class='text'>Select</div></div></div>";
-      $content .= "</td>";
-    }
-    $content .= "</tr></table></form></div>";
-    echo CreatePopup("MULTICHOOSE", [], 0, 1, $caption, 1, $content);
+    echo CreatePopup("MULTICHOOSE", [], 0, 1, $caption, 1, $content, height: $all ? "55%" : "40%");
   }
 
   if ($turn[0] == "MULTICHOOSESEARCHTARGETS" && $currentPlayer == $playerID) { //Widely copied from the above MULTICHOOSE cases, but incorporating the fact that only some options shown are selectable.
@@ -1012,7 +1119,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
 
   if ($turn[0] == "INPUTCARDNAME" && $turn[1] == $playerID) {
     $caption = "<div>Name a card</div>";
-    $content = CreateAutocompleteForm($playerID, "Submit", 30, CardTitles());
+    $content = CreateAutocompleteForm($playerID, "Submit", 30, explode("|", CardTitles()));
     echo CreatePopup("INPUTCARDNAME", [], 0, 1, $caption, 1, $content);
   }
 
@@ -1101,6 +1208,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'overlay' => $theirAllies[$i + 1] != 2 ? 1 : 0,
         'cloned' => $theirAllies[$i + 13] == 1,
       );
+      $isUnimplemented = IsUnimplemented($theirAllies[$i]);
       $cardArena = $ally->CurrentArena();
       //Their Unit Spacing
       if ($cardArena == "Ground")
@@ -1108,7 +1216,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
       else
         $cardText = '<div id="unique-' . $theirAllies[$i + 5] . '" class="cardContainer ' . ($theirAllies[$i + 1] != 2 ? 'exhausted' : '') . '">';
       //card render their units
-      $cardText .= (Card($theirAllies[$i], "concat", $cardSizeAura, $opts));
+      $cardText .= (Card($theirAllies[$i], "concat", $cardSizeAura, $opts, isUnimplemented: $isUnimplemented));
       $cardText .= ("</div>");
       if ($cardArena == "Ground")
         $groundAllies .= $cardText;
@@ -1234,7 +1342,10 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         $actionDataOverride = $inOptions ? $mzIndex : 0;
         $border = CardBorderColor($myAllies[$i], "PLAY", $action == 16);
       } else {
-        $playable = IsPlayable($myAllies[$i], $turn[0], "PLAY", $i, $restriction) && ($myAllies[$i + 1] == 2 || AllyPlayableExhausted($ally));
+        if($ally->IsUpgraded()) {
+          CheckForLeaderUpgradeAbilities($ally);
+        }
+        $playable = IsPlayable($myAllies[$i], $turn[0], "PLAY", $i, $restriction) && (!$ally->IsExhausted() || AllyPlayableExhausted($ally));
         $border = CardBorderColor($myAllies[$i], "PLAY", $playable);
         $action = $currentPlayer == $playerID && $turn[0] != "P" && $playable ? 24 : 0;
         $actionDataOverride = strval($i);
@@ -1254,6 +1365,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         'overlay' => $myAllies[$i + 1] != 2 ? 1 : 0,
         'cloned' => $myAllies[$i + 13] == 1,
       );
+      $isUnimplemented = IsUnimplemented($myAllies[$i]);
       $cardArena = $ally->CurrentArena();
       //My Unit Spacing
       if ($cardArena == "Ground")
@@ -1266,7 +1378,7 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
         $cardText .= CreateButton($playerID, "-", 10013, $i, "20px");
         $cardText .= "</div>";
       }
-      $cardText .= (Card($myAllies[$i], "concat", $cardSizeAura, $opts));
+      $cardText .= (Card($myAllies[$i], "concat", $cardSizeAura, $opts, isUnimplemented: $isUnimplemented));
       $cardText .= ("</div>");
       if ($cardArena == "Ground")
         $groundAllies .= $cardText;
@@ -1403,10 +1515,10 @@ if ($lastUpdate != 0 && $cacheVal <= $lastUpdate) {
   }
   echo ("</div>");
 
-  echo ("<div id='gamelog'>");
-  EchoLog($gameName);
-  echo ("</div>");
   if ($playerID != 3) {
+    echo ("<div id='gamelog'>");
+    EchoLog($gameName);
+    echo ("</div>");
     echo ("<div id='chatPlaceholder'></div>");
     echo ("</div>");
   }

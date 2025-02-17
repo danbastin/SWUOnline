@@ -182,35 +182,27 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
     case 19: //MULTICHOOSE X
       if (!str_starts_with($turn[0], "MULTICHOOSE") && !str_starts_with($turn[0], "MAYMULTICHOOSE"))
         break;
-      $params = explode("-", $turn[2]);
-      $maxSelect = intval($params[0]);
-      $options = explode(",", $params[1]);
-      if (count($params) > 2)
-        $minSelect = intval($params[2]);
-      else
-        $minSelect = -1;
-      if (count($chkInput) > $maxSelect) {
-        WriteLog("You selected " . count($chkInput) . " items, but a maximum of " . $maxSelect . " is allowed. Reverting gamestate prior to that effect.");
-        RevertGamestate();
-        $skipWriteGamestate = true;
-        break;
-      }
-      if ($minSelect != -1 && count($chkInput) < $minSelect && count($chkInput) < count($options)) {
-        WriteLog("You selected " . count($chkInput) . " items, but a minimum of " . $minSelect . " is requested. Reverting gamestate prior to that effect.");
-        RevertGamestate();
-        $skipWriteGamestate = true;
-        break;
-      }
       $input = [];
-      for ($i = 0; $i < count($chkInput); ++$i) {
-        if ($chkInput[$i] < 0 || $chkInput[$i] >= count($options)) {
-          WriteLog("You selected option " . $chkInput[$i] . " but that was not one of the original options. Reverting gamestate prior to that effect.");
-          RevertGamestate();
-          $skipWriteGamestate = true;
-          break;
-        } else {
-          $input[] = $options[$chkInput[$i]];
+      if ($turn[0] == "MULTICHOOSEOURUNITS"/*|| $turn[0] == "MULTICHOOSEOURUNITSANDBASE"*/) {//TODO: Redemption
+        $input[0] = [];
+        $input[1] = [];
+        $sets = explode("&", $turn[2]);
+        for($i=0; $i<count($sets); ++$i)
+        {
+          $skipWriteGamestate = ResolveMultichooseXSet($sets[$i], $chkInput[$i], $input[$i]);
+          if($skipWriteGamestate) break;
         }
+      } else if ($turn[0] == "MULTICHOOSEMYUNITSANDBASE" || $turn[0] == "MULTICHOOSETHEIRUNITSANDBASE") {
+        $onlyUnits = substr($turn[2], 2, strlen($turn[2]) - 2);
+        $onlyUnitsChkInput = [];
+        $includeBase = in_array(0, $chkInput);
+        for($i=$includeBase ? 1 : 0; $i<count($chkInput); ++$i) {
+          $onlyUnitsChkInput[] = $chkInput[$i] - 1;
+        }
+        $skipWriteGamestate = ResolveMultichooseXSet($onlyUnits, $onlyUnitsChkInput, $input);
+        if ($includeBase) array_unshift($input, "BASE");
+      } else {
+        $skipWriteGamestate = ResolveMultichooseXSet($turn[2], $chkInput, $input);
       }
       if (!$skipWriteGamestate) {
         ContinueDecisionQueue($input);
@@ -739,6 +731,10 @@ function ProcessInput($playerID, $mode, $buttonInput, $cardID, $chkCount, $chkIn
   return true;
 }
 
+function KarabotSpan() {
+  return "<span style='font-weight:bold; color:plum'>Karabot: </span>";
+}
+
 function IsModeAsync($mode)
 {
   switch ($mode) {
@@ -1018,6 +1014,7 @@ function ResolveSingleTarget($mainPlayer, $defPlayer, $target, $attackerPrefix, 
     $defender = new Ally($target, $defPlayer);
     //Resolve the combat
     $shootsFirst = ShouldCombatDamageFirst();
+    $preventDamage = ShouldPreventCombatDamage();
     $defenderPower = $defender->CurrentPower();
     if ($defenderPower < 0)
       $defenderPower = 0;
@@ -1025,7 +1022,7 @@ function ResolveSingleTarget($mainPlayer, $defPlayer, $target, $attackerPrefix, 
     $destroyed = $defender->DealDamage($totalAttack, bypassShield: HasSaboteur($attackerID, $mainPlayer, $attacker->Index()), fromCombat: true, damageDealt: $combatChainState[$CCS_DamageDealt]);
     if ($destroyed)
       ClearAttackTarget();
-    if ($attackerPrefix == "MYALLY" && (!$destroyed || !$shootsFirst)) {
+    if ($attackerPrefix == "MYALLY" && (!$destroyed || !$shootsFirst) && !$preventDamage) {
       $attackerDestroyed = $attacker->DealDamage($defenderPower, fromCombat: true);
       if ($attackerDestroyed) {
         ClearAttacker();
@@ -1070,6 +1067,25 @@ function ShouldCombatDamageFirst()
     return true;//Hound's Tooth
   if (CardTitle($combatChain[0]) == "Millennium Falcon" && SearchCurrentTurnEffects("6720065735", $mainPlayer))
     return true;//Han Solo (Has His Moments) pilot
+
+  return false;
+}
+
+function ShouldPreventCombatDamage() {
+  global $currentTurnEffects, $mainPlayer;
+  $attacker = AttackerAlly();
+
+  for ($i = 0; $i < count($currentTurnEffects); $i += CurrentTurnPieces()) {
+    if ($currentTurnEffects[$i+1] != $mainPlayer) continue;
+    if ($currentTurnEffects[$i+2] != -1 && $currentTurnEffects[$i+2] != $attacker->UniqueID()) continue;
+
+    switch ($currentTurnEffects[$i]) {
+      case "5667308555"://I Have You Now
+        return true;
+      default:
+        break;
+    }
+  }
 
   return false;
 }
@@ -1125,6 +1141,37 @@ function ResolveCombatDamage($damageDone)
   }
   $currentPlayer = $mainPlayer;
   ProcessDecisionQueue(); //Any combat related decision queue logic should be main player gamestate
+}
+
+function ResolveMultichooseXSet($data, $chkInput, &$input) {
+  $params = explode("-", $data);
+  $maxSelect = intval($params[0]);
+  $options = explode(",", $params[1]);
+  if (count($params) > 2)
+    $minSelect = intval($params[2]);
+  else
+    $minSelect = -1;
+  if (count($chkInput) > $maxSelect) {
+    WriteLog("You selected " . count($chkInput) . " items, but a maximum of " . $maxSelect . " is allowed. Reverting gamestate prior to that effect.");
+    RevertGamestate();
+    return true;
+  }
+  if ($minSelect != -1 && count($chkInput) < $minSelect && count($chkInput) < count($options)) {
+    WriteLog("You selected " . count($chkInput) . " items, but a minimum of " . $minSelect . " is requested. Reverting gamestate prior to that effect.");
+    RevertGamestate();
+    return true;
+  }
+
+  for ($i = 0; $i < count($chkInput); ++$i) {
+    if ($chkInput[$i] < 0 || $chkInput[$i] >= count($options)) {
+      WriteLog("You selected option " . $chkInput[$i] . " but that was not one of the original options. Reverting gamestate prior to that effect.");
+      RevertGamestate();
+      return true;
+    } else {
+      $input[] = $options[$chkInput[$i]];
+    }
+  }
+  return false;
 }
 
 function FinalizeChainLink($chainClosed = false)

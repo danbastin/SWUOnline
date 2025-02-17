@@ -51,7 +51,7 @@ function TextCounterColor($darkMode)
 function ClientRenderedCard($cardNumber, $action = 0, $overlay = 0, $borderColor = 0, $counters = 0, $actionDataOverride = "-", $lifeCounters = 0, $defCounters = 0, $atkCounters = 0, $controller = 0, $type = "", $sType = "", $restriction = "", $isBroken = 0, $onChain = 0, $isFrozen = 0, $gem = 0, $rotate = 0, $landscape = 0, $epicActionUsed = 0)
 {
   $rv = $cardNumber . " " . $action . " " . $overlay . " " . $borderColor . " " . $counters . " " . $actionDataOverride . " " . $lifeCounters . " " . $defCounters . " " . $atkCounters . " ";
-  $rv .= $controller . " " . $type . " " . $sType . " " . $restriction . " " . $isBroken . " " . $onChain . " " . $isFrozen . " " . $gem . " " . $rotate . " " . $landscape . " " . $epicActionUsed;
+  $rv .= $controller . " " . $type . " " . $sType . " " . $restriction . " " . $isBroken . " " . $onChain . " " . $isFrozen . " " . $gem . " " . $rotate . " " . $landscape . " " . $epicActionUsed . " " . IsUnimplemented($cardNumber);
   return $rv;
 }
 
@@ -151,7 +151,7 @@ function JSONRenderedCard(
 }
 
 //Rotate is deprecated
-function Card($cardNumber, $folder, $maxHeight, $action = 0, $showHover = 0, $overlay = 0, $borderColor = 0, $counters = 0, $actionDataOverride = "", $id = "", $rotate = false, $lifeCounters = 0, $defCounters = 0, $atkCounters = -1, $from = "", $controller = 0, $subcardNum = 0, $isExhausted = false)
+function Card($cardNumber, $folder, $maxHeight, $action = 0, $showHover = 0, $overlay = 0, $borderColor = 0, $counters = 0, $actionDataOverride = "", $id = "", $rotate = false, $lifeCounters = 0, $defCounters = 0, $atkCounters = -1, $from = "", $controller = 0, $subcardNum = 0, $isExhausted = false, $isUnimplemented = false)
 {
   global $playerID, $darkMode;
   $opts = [];
@@ -307,6 +307,25 @@ function Card($cardNumber, $folder, $maxHeight, $action = 0, $showHover = 0, $ov
     }
   }
 
+  // Unimplemented Icon Style
+  if ($isUnimplemented) {
+    $rv .= "<div style='margin: 0px;
+    top: 50%;
+    left: 50%;
+    border-radius: 0%;
+    width:40%;
+    height:40%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%);
+    position:absolute; z-index: 10;
+    background: url(./Images/restricted.png) no-repeat;
+    background-size: contain;
+    filter: drop-shadow(1px 1px 1px rgba(0, 0, 0, 0.40));
+    user-select: none;'></div>";
+  }
+
   // Sentinel Icon Style
   if (isset($opts['hasSentinel']) && $opts['hasSentinel']) {
     $rv .= "<div style='margin: 0px;
@@ -429,7 +448,7 @@ function Card($cardNumber, $folder, $maxHeight, $action = 0, $showHover = 0, $ov
         text-transform: uppercase;
         color: #1D1D1D;
         user-select: none;'
-        data-subcard-id='" . $opts['subcards'][$i] . "'>" . CardName($opts['subcards'][$i]) . "</div>";
+        data-subcard-id='" . $opts['subcards'][$i] . "'>" . CardTitle($opts['subcards'][$i]) . "</div>";
       }
     }
   }
@@ -541,15 +560,27 @@ function ProcessInputLink($player, $mode, $input, $event = 'onmousedown', $fullR
   return " " . $event . "='" . $jsCode . "'";
 }
 
-function CreateForm($playerID, $caption, $mode, $count)
+function CreateForm($playerID, $caption, $mode, $count, $countOthers=0)
 {
   global $gameName;
   $rv = "<form>";
-  $rv .= "<input type='button' onclick='chkSubmit(" . $mode . ", " . $count . ")' value='" . $caption . "'>";
+  if($countOthers > 0) {
+    $rv .= "<input type='button' onclick='chkSubmitBoth(" . $mode . ", " . $count . ", " . $countOthers . ")' value='" . $caption . "'>";
+  }
+  else {
+    $rv .= "<input type='button' onclick='chkSubmit(" . $mode . ", " . $count . ")' value='" . $caption . "'>";
+  }
   $rv .= "<input type='hidden' id='gameName' name='gameName' value='" . $gameName . "'>";
   $rv .= "<input type='hidden' id='playerID' name='playerID' value='" . $playerID . "'>";
   $rv .= "<input type='hidden' id='mode' name='mode' value='" . $mode . "'>";
-  $rv .= "<input type='hidden' id='chkCount' name='chkCount' value='" . $count . "'>";
+  if($countOthers > 0) {
+    $rv .= "<input type='hidden' id='chkCountTheirs' name='chkCountTheirs' value='" . $count . "'>";
+    $rv .= "<input type='hidden' id='chkCountMine' name='chkCountMine' value='" . $countOthers . "'>";
+  }
+  else {
+    $rv .= "<input type='hidden' id='chkCount' name='chkCount' value='" . $count . "'>";
+  }
+
   return $rv;
 }
 

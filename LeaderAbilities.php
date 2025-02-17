@@ -3,15 +3,18 @@
 function LeaderPilotDeploy($player, $leader, $target) {
   $targetUnit = new Ally($target, $player);
   $cardID = LeaderUnit($leader);
-  $targetUnit->Attach($cardID, $player);
+  $epicAction = $leader != "8520821318";//Poe Dameron JTL leader
+  $targetUnit->Attach($cardID, $player, epicAction:$epicAction);
 
   switch($cardID) {
     //Jump to Lightspeed
     case "f6eb711cf3"://Boba Fett
-      AddDecisionQueue("FINDINDICES", $player, "ALLTHEIRUNITSMULTI");
+      include_once "Libraries/MZOpHelpers.php";
+      AddDecisionQueue("FINDINDICES", $player, "ALLOURUNITSMULTI");
       AddDecisionQueue("SETDQCONTEXT", $player, "Choose units to damage", 1);
-      AddDecisionQueue("MULTICHOOSETHEIRUNIT", $player, "<-", 1);
-      AddDecisionQueue("MULTIDISTRIBUTEDAMAGE", $player, "4,1", 1);
+      AddDecisionQueue("MULTICHOOSEOURUNITS", $player, "<-", 1);
+      AddDecisionQueue("MULTIDISTRIBUTEDAMAGE", $player,
+        MultiDistributeDamageStringBuilder(4,$player,zones:"OURALLIES"), 1);
       break;
     case "a015eb5c5e"://Han Solo
       HanSoloPilotLeaderJTL($player);
@@ -48,6 +51,19 @@ function HanSoloPilotLeaderJTL($player) {
   }
 
   ReadyResource($player, $odds);
+}
+
+function CheckForLeaderUpgradeAbilities($ally) {
+  global $CS_LeaderUpgradeAbilityID1;
+  $upgrades = $ally->GetUpgrades(withMetadata:false);
+  for($i=0; $i<count($upgrades); ++$i) {
+    switch($upgrades[$i]) {
+      case "3eb545eb4b":
+        SetClassState($ally->Controller(), $CS_LeaderUpgradeAbilityID1, $upgrades[$i]);
+        break;
+      default: break;
+    }
+  }
 }
 
 ?>

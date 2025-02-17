@@ -7,6 +7,7 @@ function ProcessHitEffect($cardID)
   if(HitEffectsArePrevented()) return;
   switch($cardID)
   {
+    //Spark of Rebellion
     case "0828695133"://Seventh Sister
       if(GetAttackTarget() == "THEIRCHAR-0") {
         AddDecisionQueue("MULTIZONEINDICES", $mainPlayer, "THEIRALLY:arena=Ground");
@@ -26,6 +27,18 @@ function ProcessHitEffect($cardID)
     case "87e8807695"://Leia Organa Leader Unit
       if(LeaderAbilitiesIgnored()) break;
       AddCurrentTurnEffect("87e8807695", $mainPlayer);
+      break;
+    //Shadows of the Galaxy
+    case "4595532978"://Ketsu Onyo
+      if (GetAttackTarget() == "THEIRCHAR-0") {
+        DefeatUpgrade($mainPlayer, true, upgradeFilter: "maxCost=2");
+      }
+      break;
+    //Jump to Lightspeed
+    case "7312183744"://Moff Gideon
+      if(GetAttackTarget() == "THEIRCHAR-0") {
+        AddCurrentTurnEffect("7312183744", $defPlayer, from: "PLAY");
+      }
       break;
     default: break;
   }
@@ -198,6 +211,20 @@ function AttackModifier($cardID, $player, $index)
       if(GetClassState($otherPlayer, $CS_NumAlliesDestroyed) > 0) $modifier += 1;
       break;
     //Jump to Lightspeed
+    case "3389903389"://Black One JTL
+      $ally = new Ally("MYALLY-" . $index, $player);
+      if ($ally->IsUpgraded()) $modifier += 1;
+      break;
+    case "2177194044"://Swarming Vulture Droid
+      $allies = GetAllies($player);
+      $totalSwarmingVultureDroids = 0;
+      for ($i = 0; $i < count($allies); $i += AllyPieces()) {
+        if ($allies[$i] == "2177194044" && $i != $index) {
+          $totalSwarmingVultureDroids++;
+        }
+      }
+      $modifier += $totalSwarmingVultureDroids;
+      break;    
     case "8845408332"://Millennium Falcon (Get Out and Push)
       $ally = new Ally("MYALLY-" . $index, $player);
       $upgrades = $ally->GetUpgrades();
@@ -210,6 +237,10 @@ function AttackModifier($cardID, $player, $index)
       break;
     case "6610553087"://Nien Nunb
       $modifier += CountPilotUnitsAndPilotUpgrades($player, other: true);
+      break;
+    case "5422802110"://D'Qar Cargo Frigate
+      $ally = new Ally("MYALLY-" . $index, $player);
+      $modifier -= $ally->Damage();
       break;
     default: break;
   }

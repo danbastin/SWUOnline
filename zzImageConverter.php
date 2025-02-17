@@ -1,12 +1,20 @@
 <?php
 
-function CheckImage($cardID, $url, $definedType, $isBack=false, $set="SOR")
+function CheckImage($cardID, $url, $language, $definedType, $isBack=false, $set="SOR")
 {
-  $filename = "./WebpImages/" . $cardID . ".webp";
-  $filename = "./WebpImages2/" . $cardID . ".webp";
-  $filenameNew = "./UnimplementedCards/" . $cardID . ".webp";
-  $concatFilename = "./concat/" . $cardID . ".webp";
-  $cropFilename = "./crops/" . $cardID . "_cropped.png";
+  if($language == "EN"){
+    $filename = "./WebpImages/" . $cardID . ".webp";
+    $filename = "./WebpImages2/" . $cardID . ".webp";
+    $filenameNew = "./UnimplementedCards/" . $cardID . ".webp";
+    $concatFilename = "./concat/" . $cardID . ".webp";
+    $cropFilename = "./crops/" . $cardID . "_cropped.png";
+  }else{
+    $filename = "./WebpImages/" . $language . "/" . $cardID . ".webp";
+    $filename = "./WebpImages2/" . $language . "/" . $cardID . ".webp";
+    $concatFilename = "./concat/" . $language . "/" . $cardID . ".webp";
+    $cropFilename = "./crops/" . $language . "/" . $cardID . "_cropped.png";
+  }
+
   $isNew = false;
   if(!file_exists($filename))
   {
@@ -37,7 +45,7 @@ function CheckImage($cardID, $url, $definedType, $isBack=false, $set="SOR")
     }
     $isNew = true;
   }
-  if($isNew && !file_exists($filenameNew)) {
+  if($language == "EN" && $isNew && !file_exists($filenameNew)) {
     echo("Converting image for " . $cardID . " to new format.<BR>");
     try {
       $image = imagecreatefromwebp($filename);
